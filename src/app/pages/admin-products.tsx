@@ -170,10 +170,16 @@ export function AdminProducts() {
             Manage your product catalog and inventory
           </p>
         </div>
-        <Button onClick={handleCreateProduct}>
-          <Plus className="size-4 mr-2" />
-          Add Product
-        </Button>
+        <div className="flex w-full flex-col gap-2 sm:w-auto">
+          <Button onClick={handleCreateProduct}>
+            <Plus className="size-4 mr-2" />
+            Add Product
+          </Button>
+          <Button type="button" variant="outline">
+            <Plus className="size-4 mr-2" />
+            Add Category
+          </Button>
+        </div>
       </div>
 
       {/* Filters */}

@@ -41,23 +41,36 @@ const categories = [
   "Beauty",
 ];
 
-export function ProductFormDialog({
-  open,
-  onOpenChange,
-  onSubmit,
-  initialData,
-  mode,
-}: ProductFormDialogProps) {
-  const [formData, setFormData] = useState<ProductFormData>({
+const subcategories: Record<string, string[]> = {
+  Audio: ["Headphones", "Speakers", "Earbuds", "Microphones"],
+  Watches: ["Smart Watches", "Analog Watches", "Digital Watches"],
+  Cameras: ["DSLR", "Mirrorless", "Action Cameras", "Accessories"],
+  Home: ["Kitchen Appliances", "Home Appliances", "Smart Home"],
+  Fitness: ["Fitness Trackers", "Exercise Equipment", "Accessories"],
+  Computing: ["Laptops", "Desktops", "Monitors", "Accessories"],
+  Gaming: ["Consoles", "Controllers", "Gaming Accessories"],
+  Fashion: ["Men", "Women", "Accessories"],
+  Beauty: ["Skin Care", "Hair Care", "Personal Care"],
+};
+
+function getEmptyProductFormData(): ProductFormData {
+  return {
     name: "",
     sku: "",
     category: "",
+    subcategory: "",
     brand: "",
     description: "",
     fullDescription: "",
     price: 0,
+    purchasePrice: undefined,
+    landingCost: undefined,
+    mrp: undefined,
     discountPrice: undefined,
     taxPercentage: undefined,
+    hsnCode: "",
+    currency: "INR",
+    taxInclusive: false,
     stockQuantity: 0,
     stockStatus: "in-stock",
     image: "",
@@ -66,7 +79,17 @@ export function ProductFormDialog({
     specifications: [],
     metaTitle: "",
     metaDescription: "",
-  });
+  };
+}
+
+export function ProductFormDialog({
+  open,
+  onOpenChange,
+  onSubmit,
+  initialData,
+  mode,
+}: ProductFormDialogProps) {
+  const [formData, setFormData] = useState<ProductFormData>(getEmptyProductFormData());
 
   const [currentFeature, setCurrentFeature] = useState("");
   const [currentSpec, setCurrentSpec] = useState({ label: "", value: "" });
@@ -75,31 +98,12 @@ export function ProductFormDialog({
 
   useEffect(() => {
     if (initialData) {
-      setFormData(initialData);
+      setFormData({ ...getEmptyProductFormData(), ...initialData });
       setPrimaryImagePreview(initialData.image || initialData.images[0] || "");
       setGalleryImagePreviews(initialData.images || []);
     } else {
       // Reset form
-      setFormData({
-        name: "",
-        sku: "",
-        category: "",
-        brand: "",
-        description: "",
-        fullDescription: "",
-        price: 0,
-        discountPrice: undefined,
-        taxPercentage: undefined,
-        stockQuantity: 0,
-        stockStatus: "in-stock",
-        image: "",
-        images: [],
-        galleryImageFiles: [],
-        features: [],
-        specifications: [],
-        metaTitle: "",
-        metaDescription: "",
-      });
+      setFormData({ ...getEmptyProductFormData(), galleryImageFiles: [] });
       setPrimaryImagePreview("");
       setGalleryImagePreviews([]);
     }
@@ -198,7 +202,7 @@ export function ProductFormDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl max-h-[90vh]">
+      <DialogContent className="max-h-[92vh] w-[calc(100vw-2rem)] sm:max-w-6xl overflow-hidden">
         <DialogHeader>
           <DialogTitle>
             {mode === "create" ? "Add New Product" : "Edit Product"}
@@ -210,14 +214,17 @@ export function ProductFormDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <ScrollArea className="max-h-[calc(90vh-120px)] pr-4">
-          <form onSubmit={handleSubmit} className="space-y-6">
+        <ScrollArea className="max-h-[calc(92vh-120px)] pr-4">
+          <form
+            onSubmit={handleSubmit}
+            className="grid min-w-0 grid-cols-1 gap-6 lg:grid-cols-2"
+          >
             {/* Basic Information */}
-            <div className="space-y-4">
+            <div className="min-w-0 space-y-4 rounded-lg border p-4">
               <h3 className="font-semibold">Basic Information</h3>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div className="min-w-0 space-y-2">
                   <Label htmlFor="name">Product Name *</Label>
                   <Input
                     id="name"
@@ -229,7 +236,7 @@ export function ProductFormDialog({
                   />
                 </div>
 
-                <div className="space-y-2">
+                <div className="min-w-0 space-y-2">
                   <Label htmlFor="sku">SKU *</Label>
                   <Input
                     id="sku"
@@ -242,13 +249,17 @@ export function ProductFormDialog({
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div className="min-w-0 space-y-2">
                   <Label htmlFor="category">Category *</Label>
                   <Select
                     value={formData.category}
                     onValueChange={(value) =>
-                      setFormData({ ...formData, category: value })
+                      setFormData({
+                        ...formData,
+                        category: value,
+                        subcategory: "",
+                      })
                     }
                   >
                     <SelectTrigger>
@@ -264,7 +275,7 @@ export function ProductFormDialog({
                   </Select>
                 </div>
 
-                <div className="space-y-2">
+                <div className="min-w-0 space-y-2">
                   <Label htmlFor="brand">Brand</Label>
                   <Input
                     id="brand"
@@ -274,6 +285,34 @@ export function ProductFormDialog({
                     }
                   />
                 </div>
+              </div>
+
+              <div className="min-w-0 space-y-2 sm:max-w-[calc(50%-0.5rem)]">
+                <Label htmlFor="subcategory">Sub Category</Label>
+                <Select
+                  value={formData.subcategory}
+                  onValueChange={(value) =>
+                    setFormData({ ...formData, subcategory: value })
+                  }
+                  disabled={!formData.category}
+                >
+                  <SelectTrigger id="subcategory" className="w-full min-w-0">
+                    <SelectValue
+                      placeholder={
+                        formData.category
+                          ? "Select sub category"
+                          : "Select a category first"
+                      }
+                    />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {(subcategories[formData.category] ?? []).map((subcategory) => (
+                      <SelectItem key={subcategory} value={subcategory}>
+                        {subcategory}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
 
               <div className="space-y-2">
@@ -303,31 +342,125 @@ export function ProductFormDialog({
             </div>
 
             {/* Pricing */}
-            <div className="space-y-4">
+            <div className="min-w-0 space-y-4 rounded-lg border p-4">
               <h3 className="font-semibold">Pricing</h3>
 
-              <div className="grid grid-cols-3 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="price">Price *</Label>
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div className="min-w-0 space-y-2">
+                  <Label htmlFor="purchasePrice">Purchase Price *</Label>
+                  <Input
+                    id="purchasePrice"
+                    type="number"
+                    step="0.01"
+                    value={formData.purchasePrice ?? ""}
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        purchasePrice: e.target.value ? parseFloat(e.target.value) : undefined,
+                      })
+                    }
+                    required
+                  />
+                </div>
+
+                <div className="min-w-0 space-y-2">
+                  <Label htmlFor="landingCost">Landing Cost</Label>
+                  <Input
+                    id="landingCost"
+                    type="number"
+                    step="0.01"
+                    value={formData.landingCost ?? ""}
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        landingCost: e.target.value ? parseFloat(e.target.value) : undefined,
+                      })
+                    }
+                  />
+                </div>
+
+                <div className="min-w-0 space-y-2">
+                  <Label htmlFor="mrp">MRP *</Label>
+                  <Input
+                    id="mrp"
+                    type="number"
+                    step="0.01"
+                    value={formData.mrp ?? ""}
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        mrp: e.target.value ? parseFloat(e.target.value) : undefined,
+                      })
+                    }
+                    required
+                  />
+                </div>
+
+                <div className="min-w-0 space-y-2">
+                  <Label htmlFor="price">Selling Price *</Label>
                   <Input
                     id="price"
                     type="number"
                     step="0.01"
                     value={formData.price}
                     onChange={(e) =>
-                      setFormData({ ...formData, price: parseFloat(e.target.value) })
+                      setFormData({
+                        ...formData,
+                        price: e.target.value ? parseFloat(e.target.value) : 0,
+                      })
                     }
                     required
                   />
                 </div>
 
-                <div className="space-y-2">
+                <div className="min-w-0 space-y-2">
+                  <Label htmlFor="taxPercentage">GST % *</Label>
+                  <Input
+                    id="taxPercentage"
+                    type="number"
+                    step="0.01"
+                    value={formData.taxPercentage ?? ""}
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        taxPercentage: e.target.value ? parseFloat(e.target.value) : undefined,
+                      })
+                    }
+                    required
+                  />
+                </div>
+
+                <div className="min-w-0 space-y-2">
+                  <Label htmlFor="hsnCode">HSN Code *</Label>
+                  <Input
+                    id="hsnCode"
+                    value={formData.hsnCode || ""}
+                    onChange={(e) =>
+                      setFormData({ ...formData, hsnCode: e.target.value })
+                    }
+                    required
+                  />
+                </div>
+
+                <div className="min-w-0 space-y-2">
+                  <Label htmlFor="currency">Currency *</Label>
+                  <Input
+                    id="currency"
+                    value={formData.currency || "INR"}
+                    onChange={(e) =>
+                      setFormData({ ...formData, currency: e.target.value })
+                    }
+                    required
+                  />
+                </div>
+
+                <div className="min-w-0 space-y-2">
                   <Label htmlFor="discountPrice">Discount Price</Label>
                   <Input
                     id="discountPrice"
                     type="number"
                     step="0.01"
-                    value={formData.discountPrice || ""}
+                    value={formData.discountPrice ?? ""}
                     onChange={(e) =>
                       setFormData({
                         ...formData,
@@ -337,30 +470,28 @@ export function ProductFormDialog({
                   />
                 </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="taxPercentage">Tax %</Label>
-                  <Input
-                    id="taxPercentage"
-                    type="number"
-                    step="0.01"
-                    value={formData.taxPercentage || ""}
-                    onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        taxPercentage: e.target.value ? parseFloat(e.target.value) : undefined,
-                      })
-                    }
-                  />
+                <div className="min-w-0 space-y-2 sm:col-span-2">
+                  <label className="flex items-center gap-2 rounded-md border px-3 py-2 text-sm">
+                    <input
+                      id="taxInclusive"
+                      type="checkbox"
+                      checked={Boolean(formData.taxInclusive)}
+                      onChange={(e) =>
+                        setFormData({ ...formData, taxInclusive: e.target.checked })
+                      }
+                    />
+                    <span>Tax Inclusive</span>
+                  </label>
                 </div>
               </div>
             </div>
 
             {/* Inventory */}
-            <div className="space-y-4">
+            <div className="min-w-0 space-y-4 rounded-lg border p-4">
               <h3 className="font-semibold">Inventory</h3>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div className="min-w-0 space-y-2">
                   <Label htmlFor="stockQuantity">Stock Quantity *</Label>
                   <Input
                     id="stockQuantity"
@@ -373,7 +504,7 @@ export function ProductFormDialog({
                   />
                 </div>
 
-                <div className="space-y-2">
+                <div className="min-w-0 space-y-2">
                   <Label htmlFor="stockStatus">Stock Status *</Label>
                   <Select
                     value={formData.stockStatus}
@@ -395,7 +526,7 @@ export function ProductFormDialog({
             </div>
 
             {/* Images */}
-            <div className="space-y-4">
+            <div className="min-w-0 space-y-4 rounded-lg border p-4 lg:row-span-2">
               <h3 className="font-semibold">Product Images</h3>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -473,10 +604,10 @@ export function ProductFormDialog({
             </div>
 
             {/* Features */}
-            <div className="space-y-4">
+            <div className="min-w-0 space-y-4 rounded-lg border p-4">
               <h3 className="font-semibold">Product Features</h3>
 
-              <div className="flex gap-2">
+              <div className="flex min-w-0 gap-2">
                 <Input
                   placeholder="Add a feature"
                   value={currentFeature}
@@ -493,9 +624,9 @@ export function ProductFormDialog({
                   {formData.features.map((feature, index) => (
                     <div
                       key={index}
-                      className="flex items-center justify-between p-2 bg-accent rounded-lg"
+                      className="flex min-w-0 items-center justify-between gap-2 p-2 bg-accent rounded-lg"
                     >
-                      <span className="text-sm">{feature}</span>
+                      <span className="min-w-0 break-words text-sm">{feature}</span>
                       <Button
                         type="button"
                         variant="ghost"
@@ -512,10 +643,10 @@ export function ProductFormDialog({
             </div>
 
             {/* Specifications */}
-            <div className="space-y-4">
+            <div className="min-w-0 space-y-4 rounded-lg border p-4">
               <h3 className="font-semibold">Specifications</h3>
 
-              <div className="flex gap-2">
+              <div className="grid min-w-0 grid-cols-1 gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]">
                 <Input
                   placeholder="Label (e.g., Processor)"
                   value={currentSpec.label}
@@ -543,9 +674,9 @@ export function ProductFormDialog({
                   {formData.specifications.map((spec, index) => (
                     <div
                       key={index}
-                      className="flex items-center justify-between p-2 bg-accent rounded-lg"
+                      className="flex min-w-0 items-center justify-between gap-2 p-2 bg-accent rounded-lg"
                     >
-                      <span className="text-sm">
+                      <span className="min-w-0 break-words text-sm">
                         <span className="font-medium">{spec.label}:</span> {spec.value}
                       </span>
                       <Button
@@ -564,7 +695,7 @@ export function ProductFormDialog({
             </div>
 
             {/* SEO */}
-            <div className="space-y-4">
+            <div className="min-w-0 space-y-4 rounded-lg border p-4">
               <h3 className="font-semibold">SEO</h3>
 
               <div className="space-y-2">
@@ -592,7 +723,7 @@ export function ProductFormDialog({
             </div>
 
             {/* Actions */}
-            <div className="flex gap-3 justify-end pt-4 border-t">
+            <div className="flex gap-3 justify-end border-t pt-4 lg:col-span-2">
               <Button
                 type="button"
                 variant="outline"

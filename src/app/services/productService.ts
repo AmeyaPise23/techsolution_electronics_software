@@ -3,12 +3,19 @@ export interface ProductFormData {
   name: string;
   sku: string;
   category: string;
+  subcategory?: string;
   brand: string;
   description: string;
   fullDescription: string;
   price: number;
+  purchasePrice?: number;
+  landingCost?: number;
+  mrp?: number;
   discountPrice?: number;
   taxPercentage?: number;
+  hsnCode?: string;
+  currency?: string;
+  taxInclusive?: boolean;
   stockQuantity: number;
   stockStatus: "in-stock" | "out-of-stock" | "pre-order";
   image?: string;
@@ -58,8 +65,14 @@ interface BackendProduct {
   description?: string;
   fullDescription?: string;
   price?: number | string;
+  purchasePrice?: number | string;
+  landingCost?: number | string;
+  mrp?: number | string;
   discountPrice?: number | string;
   taxPercentage?: number;
+  hsnCode?: string;
+  currency?: string;
+  taxInclusive?: boolean;
   rating?: number;
   stockQuantity?: number;
   stockStatus?: ProductFormData["stockStatus"] | string;
@@ -122,11 +135,19 @@ function mapBackendProduct(product: BackendProduct): ProductFormData {
     description: product.description ?? "",
     fullDescription: product.fullDescription ?? "",
     price: toNumber(product.price),
+    purchasePrice:
+      product.purchasePrice === undefined ? undefined : toNumber(product.purchasePrice),
+    landingCost:
+      product.landingCost === undefined ? undefined : toNumber(product.landingCost),
+    mrp: product.mrp === undefined ? undefined : toNumber(product.mrp),
     discountPrice:
       product.discountPrice === undefined
         ? undefined
         : toNumber(product.discountPrice),
     taxPercentage: product.taxPercentage,
+    hsnCode: product.hsnCode,
+    currency: product.currency,
+    taxInclusive: product.taxInclusive,
     stockQuantity,
     stockStatus,
     image: primaryImage,
@@ -174,12 +195,36 @@ function buildProductFormData(data: ProductFormData): FormData {
   formData.append("stockQuantity", String(data.stockQuantity));
   formData.append("stockStatus", data.stockStatus);
 
+  if (data.purchasePrice !== undefined) {
+    formData.append("purchasePrice", String(data.purchasePrice));
+  }
+
+  if (data.landingCost !== undefined) {
+    formData.append("landingCost", String(data.landingCost));
+  }
+
+  if (data.mrp !== undefined) {
+    formData.append("mrp", String(data.mrp));
+  }
+
   if (data.discountPrice !== undefined) {
     formData.append("discountPrice", String(data.discountPrice));
   }
 
   if (data.taxPercentage !== undefined) {
     formData.append("taxPercentage", String(data.taxPercentage));
+  }
+
+  if (data.hsnCode) {
+    formData.append("hsnCode", data.hsnCode);
+  }
+
+  if (data.currency) {
+    formData.append("currency", data.currency);
+  }
+
+  if (data.taxInclusive !== undefined) {
+    formData.append("taxInclusive", String(data.taxInclusive));
   }
 
   if (data.rating !== undefined) {
