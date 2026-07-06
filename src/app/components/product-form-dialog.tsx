@@ -70,11 +70,14 @@ export function ProductFormDialog({
 
   const [currentFeature, setCurrentFeature] = useState("");
   const [currentSpec, setCurrentSpec] = useState({ label: "", value: "" });
-  const [imageUrl, setImageUrl] = useState("");
+  const [primaryImagePreview, setPrimaryImagePreview] = useState("");
+  const [galleryImagePreviews, setGalleryImagePreviews] = useState<string[]>([]);
 
   useEffect(() => {
     if (initialData) {
       setFormData(initialData);
+      setPrimaryImagePreview(initialData.image || initialData.images[0] || "");
+      setGalleryImagePreviews(initialData.images || []);
     } else {
       // Reset form
       setFormData({
@@ -89,12 +92,16 @@ export function ProductFormDialog({
         taxPercentage: undefined,
         stockQuantity: 0,
         stockStatus: "in-stock",
+        image: "",
         images: [],
+        galleryImageFiles: [],
         features: [],
         specifications: [],
         metaTitle: "",
         metaDescription: "",
       });
+      setPrimaryImagePreview("");
+      setGalleryImagePreviews([]);
     }
   }, [initialData, open]);
 
@@ -137,20 +144,55 @@ export function ProductFormDialog({
     });
   };
 
-  const addImage = () => {
-    if (imageUrl.trim()) {
-      setFormData({
-        ...formData,
-        images: [...formData.images, imageUrl.trim()],
-      });
-      setImageUrl("");
-    }
+  const handlePrimaryImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const previewUrl = URL.createObjectURL(file);
+    setPrimaryImagePreview(previewUrl);
+    setFormData({
+      ...formData,
+      image: previewUrl,
+      imageFile: file,
+    });
+  };
+
+  const handleGalleryImagesChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const currentFiles = formData.galleryImageFiles || [];
+    const selectedFiles = Array.from(e.target.files || []);
+    const nextFiles = [...currentFiles, ...selectedFiles].slice(0, 5);
+    const newPreviewUrls = selectedFiles
+      .slice(0, Math.max(0, 5 - currentFiles.length))
+      .map((file) => URL.createObjectURL(file));
+    const nextPreviewUrls = [...galleryImagePreviews, ...newPreviewUrls].slice(0, 5);
+
+    setGalleryImagePreviews(nextPreviewUrls);
+    setFormData({
+      ...formData,
+      images: nextPreviewUrls,
+      galleryImageFiles: nextFiles,
+    });
+    e.target.value = "";
+  };
+
+  const removePrimaryImage = () => {
+    setPrimaryImagePreview("");
+    setFormData({
+      ...formData,
+      image: "",
+      imageFile: undefined,
+    });
   };
 
   const removeImage = (index: number) => {
+    const nextPreviews = galleryImagePreviews.filter((_, i) => i !== index);
+    const nextFiles = formData.galleryImageFiles?.filter((_, i) => i !== index) || [];
+
+    setGalleryImagePreviews(nextPreviews);
     setFormData({
       ...formData,
-      images: formData.images.filter((_, i) => i !== index),
+      images: nextPreviews,
+      galleryImageFiles: nextFiles,
     });
   };
 
@@ -356,21 +398,59 @@ export function ProductFormDialog({
             <div className="space-y-4">
               <h3 className="font-semibold">Product Images</h3>
 
-              <div className="flex gap-2">
-                <Input
-                  placeholder="Image URL"
-                  value={imageUrl}
-                  onChange={(e) => setImageUrl(e.target.value)}
-                  onKeyPress={(e) => e.key === "Enter" && (e.preventDefault(), addImage())}
-                />
-                <Button type="button" onClick={addImage} size="icon">
-                  <Plus className="size-4" />
-                </Button>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="primaryImage">Primary Image *</Label>
+                  <Input
+                    id="primaryImage"
+                    type="file"
+                    accept="image/jpeg,image/jpg"
+                    onChange={handlePrimaryImageChange}
+                    required={mode === "create" && !formData.imageFile}
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="galleryImages">
+                    Gallery Images ({galleryImagePreviews.length}/5)
+                  </Label>
+                  <Input
+                    id="galleryImages"
+                    type="file"
+                    accept="image/jpeg,image/jpg"
+                    multiple
+                    disabled={galleryImagePreviews.length >= 5}
+                    onChange={handleGalleryImagesChange}
+                  />
+                </div>
               </div>
 
-              {formData.images.length > 0 && (
+              {primaryImagePreview ? (
+                <div className="relative w-full max-w-xs group">
+                  <img
+                    src={primaryImagePreview}
+                    alt="Primary product"
+                    className="w-full h-40 object-cover rounded-lg border border-border"
+                  />
+                  <Button
+                    type="button"
+                    variant="destructive"
+                    size="icon"
+                    className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity size-7"
+                    onClick={removePrimaryImage}
+                  >
+                    <X className="size-3" />
+                  </Button>
+                </div>
+              ) : (
+                <div className="w-full max-w-xs h-40 rounded-lg border border-dashed border-border bg-muted flex items-center justify-center">
+                  <Upload className="size-6 text-muted-foreground" />
+                </div>
+              )}
+
+              {galleryImagePreviews.length > 0 && (
                 <div className="grid grid-cols-3 gap-4">
-                  {formData.images.map((img, index) => (
+                  {galleryImagePreviews.map((img, index) => (
                     <div key={index} className="relative group">
                       <img
                         src={img}

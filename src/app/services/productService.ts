@@ -1,8 +1,3 @@
-// Product Service - Placeholder for backend API integration
-// Replace these functions with actual API calls when backend is ready
-
-import { products as sampleProducts } from "../data/products";
-
 export interface ProductFormData {
   id?: string;
   name: string;
@@ -16,7 +11,10 @@ export interface ProductFormData {
   taxPercentage?: number;
   stockQuantity: number;
   stockStatus: "in-stock" | "out-of-stock" | "pre-order";
+  image?: string;
+  imageFile?: File;
   images: string[];
+  galleryImageFiles?: File[];
   features: string[];
   specifications: { label: string; value: string }[];
   metaTitle?: string;
@@ -27,99 +25,221 @@ export interface ProductFormData {
   createdAt?: string;
 }
 
-// TODO: Replace with your backend URL
-const API_BASE_URL = "https://your-backend-api.com/api";
+interface ApiResponse<T> {
+  success: boolean;
+  message?: string;
+  data: T;
+}
 
-export const productService = {
-  // Get all products
-  async getAllProducts(): Promise<ProductFormData[]> {
-    // TODO: Replace with actual API call
-    // const response = await fetch(`${API_BASE_URL}/products`);
-    // return response.json();
+interface BackendProductImage {
+  imageData?: string;
+  fileName?: string;
+  contentType?: string;
+  primary?: boolean;
+  sortOrder?: number;
+}
 
-    // Mock implementation - returns sample products from existing data
-    return sampleProducts.map(product => ({
-      id: product.id,
-      name: product.name,
-      sku: `SKU-${product.id}`,
-      category: product.category,
-      brand: product.category,
-      description: product.description,
-      fullDescription: product.description,
-      price: product.price,
-      stockQuantity: product.inStock ? 100 : 0,
-      stockStatus: product.inStock ? "in-stock" as const : "out-of-stock" as const,
-      images: product.images,
-      features: product.features,
-      specifications: product.specifications,
-      rating: product.rating,
-      reviews: product.reviews,
-      inStock: product.inStock,
-      createdAt: "2026-05-01T00:00:00Z",
-    }));
-  },
+interface BackendProductFeature {
+  feature?: string;
+}
 
-  // Get single product by ID
-  async getProductById(id: string): Promise<ProductFormData | null> {
-    // TODO: Replace with actual API call
-    // const response = await fetch(`${API_BASE_URL}/products/${id}`);
-    // return response.json();
+interface BackendProductSpecification {
+  label?: string;
+  specValue?: string;
+  value?: string;
+}
 
-    // Mock implementation
-    const product = sampleProducts.find(p => p.id === id);
-    if (!product) return null;
+interface BackendProduct {
+  id?: string;
+  name?: string;
+  sku?: string;
+  category?: string;
+  brand?: string;
+  description?: string;
+  fullDescription?: string;
+  price?: number | string;
+  discountPrice?: number | string;
+  taxPercentage?: number;
+  rating?: number;
+  stockQuantity?: number;
+  stockStatus?: ProductFormData["stockStatus"] | string;
+  image?: string;
+  images?: BackendProductImage[];
+  features?: BackendProductFeature[];
+  specifications?: BackendProductSpecification[];
+  metaTitle?: string;
+  metaDescription?: string;
+  createdAt?: string;
+}
 
-    return {
-      id: product.id,
-      name: product.name,
-      sku: `SKU-${product.id}`,
-      category: product.category,
-      brand: product.category,
-      description: product.description,
-      fullDescription: product.description,
-      price: product.price,
-      stockQuantity: product.inStock ? 100 : 0,
-      stockStatus: product.inStock ? "in-stock" as const : "out-of-stock" as const,
-      images: product.images,
-      features: product.features,
-      specifications: product.specifications,
-      rating: product.rating,
-      reviews: product.reviews,
-      inStock: product.inStock,
-      createdAt: "2026-05-01T00:00:00Z",
-    };
-  },
+const API_BASE_URL =
+  import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8080/api";
 
-  // Create new product
-// Create new product
-async createProduct(data: ProductFormData): Promise<ProductFormData> {
-  const token = localStorage.getItem("auth_token");
+const PRODUCT_LIST_URL = `${API_BASE_URL}/products/products/list.json`;
+const PRODUCT_CREATE_URL = `${API_BASE_URL}/products/save/product`;
+const PRODUCT_DELETE_URL = `${API_BASE_URL}/products/delete/product`;
 
-  const response = await fetch(
-    "http://localhost:8080/api/products/save/product",
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify(data),
-    }
+function toNumber(value: number | string | undefined, fallback = 0): number {
+  if (typeof value === "number") return value;
+  if (typeof value === "string") {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : fallback;
+  }
+  return fallback;
+}
+
+function toStockStatus(status: string | undefined): ProductFormData["stockStatus"] {
+  if (status === "out-of-stock" || status === "pre-order") return status;
+  return "in-stock";
+}
+
+function toImageSource(image?: BackendProductImage): string | undefined {
+  if (!image?.imageData) return undefined;
+  return `data:${image.contentType || "image/jpeg"};base64,${image.imageData}`;
+}
+
+function mapBackendProduct(product: BackendProduct): ProductFormData {
+  const sortedImages = [...(product.images ?? [])].sort(
+    (a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0)
   );
+  const imageSources = sortedImages
+    .map(toImageSource)
+    .filter((image): image is string => Boolean(image));
+  const primaryImage =
+    toImageSource(sortedImages.find((image) => image.primary)) ||
+    imageSources[0] ||
+    product.image ||
+    "";
+  const stockStatus = toStockStatus(product.stockStatus);
+  const stockQuantity = product.stockQuantity ?? 0;
 
+  return {
+    id: product.id,
+    name: product.name ?? "",
+    sku: product.sku ?? "",
+    category: product.category ?? "",
+    brand: product.brand ?? "",
+    description: product.description ?? "",
+    fullDescription: product.fullDescription ?? "",
+    price: toNumber(product.price),
+    discountPrice:
+      product.discountPrice === undefined
+        ? undefined
+        : toNumber(product.discountPrice),
+    taxPercentage: product.taxPercentage,
+    stockQuantity,
+    stockStatus,
+    image: primaryImage,
+    images: imageSources.length > 0 ? imageSources : primaryImage ? [primaryImage] : [],
+    features: (product.features ?? [])
+      .map((feature) => feature.feature)
+      .filter((feature): feature is string => Boolean(feature)),
+    specifications: (product.specifications ?? [])
+      .map((specification) => ({
+        label: specification.label ?? "",
+        value: specification.value ?? specification.specValue ?? "",
+      }))
+      .filter((specification) => specification.label || specification.value),
+    metaTitle: product.metaTitle,
+    metaDescription: product.metaDescription,
+    rating: product.rating ?? 0,
+    reviews: 0,
+    inStock: stockStatus === "in-stock" && stockQuantity > 0,
+    createdAt: product.createdAt,
+  };
+}
+
+async function parseApiResponse<T>(response: Response): Promise<T> {
+  const responseBody = await response.json();
   if (!response.ok) {
-    const errorMessage = await response.text();
-    throw new Error(errorMessage || "Failed to create product");
+    throw new Error(responseBody?.message || "Request failed");
+  }
+  if (responseBody?.success === false) {
+    throw new Error(responseBody?.message || "Request failed");
   }
 
-  const newProduct: ProductFormData = await response.json();
+  return (responseBody.data ?? responseBody) as T;
+}
 
-  console.log("Product created successfully:", newProduct);
+function buildProductFormData(data: ProductFormData): FormData {
+  const formData = new FormData();
 
-  return newProduct;
-},
+  formData.append("name", data.name);
+  formData.append("sku", data.sku);
+  formData.append("category", data.category);
+  formData.append("brand", data.brand || "");
+  formData.append("description", data.description);
+  formData.append("fullDescription", data.fullDescription || "");
+  formData.append("price", String(data.price));
+  formData.append("stockQuantity", String(data.stockQuantity));
+  formData.append("stockStatus", data.stockStatus);
 
-  // Update existing product
+  if (data.discountPrice !== undefined) {
+    formData.append("discountPrice", String(data.discountPrice));
+  }
+
+  if (data.taxPercentage !== undefined) {
+    formData.append("taxPercentage", String(data.taxPercentage));
+  }
+
+  if (data.rating !== undefined) {
+    formData.append("rating", String(data.rating));
+  }
+
+  if (data.metaTitle) {
+    formData.append("metaTitle", data.metaTitle);
+  }
+
+  if (data.metaDescription) {
+    formData.append("metaDescription", data.metaDescription);
+  }
+
+  if (data.imageFile) {
+    formData.append("image", data.imageFile);
+  }
+
+  data.galleryImageFiles?.forEach((file) => {
+    formData.append("galleryImages", file);
+  });
+
+  data.features.forEach((feature, index) => {
+    formData.append(`features[${index}]`, feature);
+  });
+
+  data.specifications.forEach((specification, index) => {
+    formData.append(`specifications[${index}].label`, specification.label);
+    formData.append(`specifications[${index}].value`, specification.value);
+  });
+
+  return formData;
+}
+
+export const productService = {
+  async getAllProducts(): Promise<ProductFormData[]> {
+    return this.listProducts();
+  },
+
+  async getProductById(id: string): Promise<ProductFormData | null> {
+    const products = await this.getAllProducts();
+    return products.find((product) => product.id === id) ?? null;
+  },
+
+  async createProduct(data: ProductFormData): Promise<ProductFormData> {
+    const token = localStorage.getItem("auth_token");
+    const formData = buildProductFormData(data);
+
+    const response = await fetch(PRODUCT_CREATE_URL, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+      body: formData,
+    });
+
+    const product = await parseApiResponse<BackendProduct>(response);
+    return mapBackendProduct(product);
+  },
+
   async updateProduct(id: string, data: ProductFormData): Promise<ProductFormData> {
     // TODO: Replace with actual API call
     // const response = await fetch(`${API_BASE_URL}/products/${id}`, {
@@ -134,18 +254,20 @@ async createProduct(data: ProductFormData): Promise<ProductFormData> {
     return { ...data, id };
   },
 
-  // Delete product
   async deleteProduct(id: string): Promise<void> {
-    // TODO: Replace with actual API call
-    // await fetch(`${API_BASE_URL}/products/${id}`, {
-    //   method: 'DELETE',
-    // });
+    const token = localStorage.getItem("auth_token");
+    const response = await fetch(PRODUCT_DELETE_URL, {
+      method: "DELETE",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "text/plain",
+      },
+      body: id,
+    });
 
-    // Mock implementation
-    console.log("Delete product:", id);
+    await parseApiResponse<ApiResponse<void>>(response);
   },
 
-  // Upload image (for future use)
   async uploadImage(file: File): Promise<string> {
     // TODO: Replace with actual image upload
     // const formData = new FormData();
@@ -159,5 +281,11 @@ async createProduct(data: ProductFormData): Promise<ProductFormData> {
 
     // Mock implementation - returns a placeholder URL
     return URL.createObjectURL(file);
+  },
+
+  async listProducts(): Promise<ProductFormData[]> {
+    const response = await fetch(PRODUCT_LIST_URL);
+    const products = await parseApiResponse<BackendProduct[]>(response);
+    return products.map(mapBackendProduct);
   },
 };

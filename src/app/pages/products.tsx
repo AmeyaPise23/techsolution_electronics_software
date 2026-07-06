@@ -1,7 +1,6 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Navbar } from "../components/navbar";
 import { ProductCard } from "../components/product-card";
-import { products, categories } from "../data/products";
 import { Button } from "../components/ui/button";
 import {
   Select,
@@ -11,12 +10,38 @@ import {
   SelectValue,
 } from "../components/ui/select";
 import { ArrowUpDown } from "lucide-react";
+import { productService, ProductFormData } from "../services/productService";
 
 type SortOption = "default" | "price-asc" | "price-desc" | "rating";
 
 export function Products() {
+  const [products, setProducts] = useState<ProductFormData[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("All Products");
   const [sortBy, setSortBy] = useState<SortOption>("default");
+  const categories = [
+    "All Products",
+    ...Array.from(new Set(products.map((product) => product.category).filter(Boolean))),
+  ];
+
+  useEffect(() => {
+    async function loadProducts() {
+      try {
+        setLoading(true);
+        setError("");
+        const data = await productService.getAllProducts();
+        setProducts(data);
+      } catch (error) {
+        console.error(error);
+        setError("Unable to load products right now.");
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    loadProducts();
+  }, []);
 
   // Filter products by category
   const filteredProducts = products.filter((product) => {
@@ -86,7 +111,19 @@ export function Products() {
         </div>
 
         {/* Products Grid */}
-        {sortedProducts.length > 0 ? (
+        {loading ? (
+          <div className="text-center py-16 text-muted-foreground">
+            Loading products...
+          </div>
+        ) : error ? (
+          <div className="text-center py-16">
+            <div className="max-w-md mx-auto">
+              <h3 className="mb-2">Products unavailable</h3>
+              <p className="text-muted-foreground mb-6">{error}</p>
+              <Button onClick={() => window.location.reload()}>Try Again</Button>
+            </div>
+          </div>
+        ) : sortedProducts.length > 0 ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
             {sortedProducts.map((product) => (
               <ProductCard key={product.id} product={product} />

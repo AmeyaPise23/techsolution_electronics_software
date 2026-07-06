@@ -1,7 +1,6 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useParams, Link, useNavigate } from "react-router";
 import { Navbar } from "../components/navbar";
-import { products } from "../data/products";
 import { Button } from "../components/ui/button";
 import { Badge } from "../components/ui/badge";
 import {
@@ -27,14 +26,50 @@ import {
 } from "../components/ui/table";
 import { Star, ShoppingCart, Heart, Share2, Check, ChevronLeft } from "lucide-react";
 import { motion } from "motion/react";
+import { productService, ProductFormData } from "../services/productService";
 
 export function ProductDetails() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const product = products.find((p) => p.id === id);
-
+  const [product, setProduct] = useState<ProductFormData | null>(null);
+  const [loading, setLoading] = useState(true);
   const [selectedImage, setSelectedImage] = useState(0);
   const [quantity, setQuantity] = useState(1);
+  const productImages = product?.images.length ? product.images : product?.image ? [product.image] : [];
+
+  useEffect(() => {
+    async function loadProduct() {
+      if (!id) {
+        setLoading(false);
+        return;
+      }
+
+      try {
+        setLoading(true);
+        const data = await productService.getProductById(id);
+        setProduct(data);
+        setSelectedImage(0);
+      } catch (error) {
+        console.error(error);
+        setProduct(null);
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    loadProduct();
+  }, [id]);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen">
+        <Navbar />
+        <div className="container mx-auto px-4 py-16 text-center text-muted-foreground">
+          Loading product...
+        </div>
+      </div>
+    );
+  }
 
   if (!product) {
     return (
@@ -99,17 +134,23 @@ export function ProductDetails() {
               transition={{ duration: 0.3 }}
               className="aspect-square overflow-hidden rounded-xl border bg-muted"
             >
-              <img
-                src={product.images[selectedImage]}
-                alt={product.name}
-                className="size-full object-cover"
-              />
+              {productImages[selectedImage] ? (
+                <img
+                  src={productImages[selectedImage]}
+                  alt={product.name}
+                  className="size-full object-cover"
+                />
+              ) : (
+                <div className="size-full flex items-center justify-center text-muted-foreground">
+                  No image
+                </div>
+              )}
             </motion.div>
 
             {/* Thumbnail Images */}
-            {product.images.length > 1 && (
+            {productImages.length > 1 && (
               <div className="grid grid-cols-3 gap-4">
-                {product.images.map((image, index) => (
+                {productImages.map((image, index) => (
                   <button
                     key={index}
                     onClick={() => setSelectedImage(index)}
@@ -144,16 +185,16 @@ export function ProductDetails() {
                     <Star
                       key={i}
                       className={`size-5 ${
-                        i < Math.floor(product.rating)
+                        i < Math.floor(product.rating ?? 0)
                           ? "fill-yellow-400 text-yellow-400"
                           : "text-muted-foreground/30"
                       }`}
                     />
                   ))}
-                  <span className="ml-2 font-medium">{product.rating}</span>
+                  <span className="ml-2 font-medium">{product.rating ?? 0}</span>
                 </div>
                 <span className="text-sm text-muted-foreground">
-                  {product.reviews.toLocaleString()} reviews
+                  {(product.reviews ?? 0).toLocaleString()} reviews
                 </span>
               </div>
             </div>
@@ -284,29 +325,7 @@ export function ProductDetails() {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
-            {product.userReviews.map((review) => (
-              <div key={review.id} className="border-b last:border-0 pb-6 last:pb-0">
-                <div className="flex items-center justify-between mb-2">
-                  <div>
-                    <div className="font-medium">{review.name}</div>
-                    <div className="text-sm text-muted-foreground">{review.date}</div>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    {[...Array(5)].map((_, i) => (
-                      <Star
-                        key={i}
-                        className={`size-4 ${
-                          i < review.rating
-                            ? "fill-yellow-400 text-yellow-400"
-                            : "text-muted-foreground/30"
-                        }`}
-                      />
-                    ))}
-                  </div>
-                </div>
-                <p className="text-muted-foreground">{review.comment}</p>
-              </div>
-            ))}
+            <p className="text-muted-foreground">No reviews yet.</p>
           </CardContent>
         </Card>
       </main>

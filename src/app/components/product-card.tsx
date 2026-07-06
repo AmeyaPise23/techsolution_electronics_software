@@ -1,12 +1,12 @@
 import { Star, ShoppingCart } from "lucide-react";
 import { Link } from "react-router";
-import type { Product } from "../data/products";
+import type { ProductFormData } from "../services/productService";
 import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
 import { motion } from "motion/react";
 
 interface ProductCardProps {
-  product: Product;
+  product: ProductFormData;
 }
 
 export function ProductCard({ product }: ProductCardProps) {
@@ -19,11 +19,17 @@ export function ProductCard({ product }: ProductCardProps) {
         <div className="group relative overflow-hidden rounded-xl border bg-card transition-all hover:shadow-lg">
           {/* Product Image */}
           <div className="aspect-square overflow-hidden bg-muted">
-            <img
-              src={product.image}
-              alt={product.name}
-              className="size-full object-cover transition-transform duration-300 group-hover:scale-105"
-            />
+            {product.image ? (
+              <img
+                src={product.image}
+                alt={product.name}
+                className="size-full object-cover transition-transform duration-300 group-hover:scale-105"
+              />
+            ) : (
+              <div className="size-full flex items-center justify-center text-sm text-muted-foreground">
+                No image
+              </div>
+            )}
             {!product.inStock && (
               <div className="absolute inset-0 bg-background/80 flex items-center justify-center">
                 <Badge variant="secondary" className="text-sm">
@@ -52,10 +58,10 @@ export function ProductCard({ product }: ProductCardProps) {
             <div className="flex items-center gap-1">
               <div className="flex items-center">
                 <Star className="size-4 fill-yellow-400 text-yellow-400" />
-                <span className="ml-1 text-sm font-medium">{product.rating}</span>
+                <span className="ml-1 text-sm font-medium">{product.rating ?? 0}</span>
               </div>
               <span className="text-xs text-muted-foreground">
-                ({product.reviews.toLocaleString()} reviews)
+                ({(product.reviews ?? 0).toLocaleString()} reviews)
               </span>
             </div>
 

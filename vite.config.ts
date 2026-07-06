@@ -31,6 +31,23 @@ export default defineConfig({
     },
   },
 
+  server: {
+    watch: {
+      ignored: [
+        '**/.git/**',
+        '**/.metadata/**',
+        '**/.agents/**',
+        '**/.codex/**',
+        '**/.github/**',
+        '**/backend/**',
+        '**/dist/**',
+        '**/target/**',
+        '**/uploads/**',
+        '**/*.md',
+      ],
+    },
+  },
+
   // File types to support raw imports. Never add .css, .tsx, or .ts files to this.
   assetsInclude: ['**/*.svg', '**/*.csv'],
 })
