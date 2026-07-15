@@ -20,6 +20,7 @@ import {
 import { ScrollArea } from "./ui/scroll-area";
 import { Plus, X, Upload } from "lucide-react";
 import { ProductFormData } from "../services/productService";
+import { categoryService, FlatCategory } from "../services/categoryService";
 
 interface ProductFormDialogProps {
   open: boolean;
@@ -29,48 +30,15 @@ interface ProductFormDialogProps {
   mode: "create" | "edit";
 }
 
-const categories = [
-  "Audio",
-  "Watches",
-  "Cameras",
-  "Home",
-  "Fitness",
-  "Computing",
-  "Gaming",
-  "Fashion",
-  "Beauty",
-];
-
-const subcategories: Record<string, string[]> = {
-  Audio: ["Headphones", "Speakers", "Earbuds", "Microphones"],
-  Watches: ["Smart Watches", "Analog Watches", "Digital Watches"],
-  Cameras: ["DSLR", "Mirrorless", "Action Cameras", "Accessories"],
-  Home: ["Kitchen Appliances", "Home Appliances", "Smart Home"],
-  Fitness: ["Fitness Trackers", "Exercise Equipment", "Accessories"],
-  Computing: ["Laptops", "Desktops", "Monitors", "Accessories"],
-  Gaming: ["Consoles", "Controllers", "Gaming Accessories"],
-  Fashion: ["Men", "Women", "Accessories"],
-  Beauty: ["Skin Care", "Hair Care", "Personal Care"],
-};
-
 function getEmptyProductFormData(): ProductFormData {
   return {
     name: "",
     sku: "",
     category: "",
-    subcategory: "",
     brand: "",
     description: "",
     fullDescription: "",
     price: 0,
-    purchasePrice: undefined,
-    landingCost: undefined,
-    mrp: undefined,
-    discountPrice: undefined,
-    taxPercentage: undefined,
-    hsnCode: "",
-    currency: "INR",
-    taxInclusive: false,
     stockQuantity: 0,
     stockStatus: "in-stock",
     image: "",
@@ -96,13 +64,26 @@ export function ProductFormDialog({
   const [primaryImagePreview, setPrimaryImagePreview] = useState("");
   const [galleryImagePreviews, setGalleryImagePreviews] = useState<string[]>([]);
 
+  const [flatCategories, setFlatCategories] = useState<FlatCategory[]>([]);
+
+  useEffect(() => {
+    if (!open) return;
+
+    let cancelled = false;
+    categoryService.getFlatCategories().then((cats) => {
+      if (!cancelled) setFlatCategories(cats);
+    }).catch(() => {
+      if (!cancelled) setFlatCategories([]);
+    });
+    return () => { cancelled = true; };
+  }, [open]);
+
   useEffect(() => {
     if (initialData) {
       setFormData({ ...getEmptyProductFormData(), ...initialData });
       setPrimaryImagePreview(initialData.image || initialData.images[0] || "");
       setGalleryImagePreviews(initialData.images || []);
     } else {
-      // Reset form
       setFormData({ ...getEmptyProductFormData(), galleryImageFiles: [] });
       setPrimaryImagePreview("");
       setGalleryImagePreviews([]);
@@ -255,20 +236,16 @@ export function ProductFormDialog({
                   <Select
                     value={formData.category}
                     onValueChange={(value) =>
-                      setFormData({
-                        ...formData,
-                        category: value,
-                        subcategory: "",
-                      })
+                      setFormData({ ...formData, category: value })
                     }
                   >
                     <SelectTrigger>
                       <SelectValue placeholder="Select category" />
                     </SelectTrigger>
                     <SelectContent>
-                      {categories.map((cat) => (
-                        <SelectItem key={cat} value={cat}>
-                          {cat}
+                      {flatCategories.map((cat) => (
+                        <SelectItem key={cat.id} value={cat.name}>
+                          {"  ".repeat(cat.depth)}{cat.depth > 0 ? "└ " : ""}{cat.name}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -285,34 +262,6 @@ export function ProductFormDialog({
                     }
                   />
                 </div>
-              </div>
-
-              <div className="min-w-0 space-y-2 sm:max-w-[calc(50%-0.5rem)]">
-                <Label htmlFor="subcategory">Sub Category</Label>
-                <Select
-                  value={formData.subcategory}
-                  onValueChange={(value) =>
-                    setFormData({ ...formData, subcategory: value })
-                  }
-                  disabled={!formData.category}
-                >
-                  <SelectTrigger id="subcategory" className="w-full min-w-0">
-                    <SelectValue
-                      placeholder={
-                        formData.category
-                          ? "Select sub category"
-                          : "Select a category first"
-                      }
-                    />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {(subcategories[formData.category] ?? []).map((subcategory) => (
-                      <SelectItem key={subcategory} value={subcategory}>
-                        {subcategory}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
               </div>
 
               <div className="space-y-2">
@@ -338,190 +287,6 @@ export function ProductFormDialog({
                   }
                   rows={4}
                 />
-              </div>
-            </div>
-
-            {/* Pricing */}
-            <div className="min-w-0 space-y-4 rounded-lg border p-4">
-              <h3 className="font-semibold">Pricing</h3>
-
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <div className="min-w-0 space-y-2">
-                  <Label htmlFor="purchasePrice">Purchase Price *</Label>
-                  <Input
-                    id="purchasePrice"
-                    type="number"
-                    step="0.01"
-                    value={formData.purchasePrice ?? ""}
-                    onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        purchasePrice: e.target.value ? parseFloat(e.target.value) : undefined,
-                      })
-                    }
-                    required
-                  />
-                </div>
-
-                <div className="min-w-0 space-y-2">
-                  <Label htmlFor="landingCost">Landing Cost</Label>
-                  <Input
-                    id="landingCost"
-                    type="number"
-                    step="0.01"
-                    value={formData.landingCost ?? ""}
-                    onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        landingCost: e.target.value ? parseFloat(e.target.value) : undefined,
-                      })
-                    }
-                  />
-                </div>
-
-                <div className="min-w-0 space-y-2">
-                  <Label htmlFor="mrp">MRP *</Label>
-                  <Input
-                    id="mrp"
-                    type="number"
-                    step="0.01"
-                    value={formData.mrp ?? ""}
-                    onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        mrp: e.target.value ? parseFloat(e.target.value) : undefined,
-                      })
-                    }
-                    required
-                  />
-                </div>
-
-                <div className="min-w-0 space-y-2">
-                  <Label htmlFor="price">Selling Price *</Label>
-                  <Input
-                    id="price"
-                    type="number"
-                    step="0.01"
-                    value={formData.price}
-                    onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        price: e.target.value ? parseFloat(e.target.value) : 0,
-                      })
-                    }
-                    required
-                  />
-                </div>
-
-                <div className="min-w-0 space-y-2">
-                  <Label htmlFor="taxPercentage">GST % *</Label>
-                  <Input
-                    id="taxPercentage"
-                    type="number"
-                    step="0.01"
-                    value={formData.taxPercentage ?? ""}
-                    onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        taxPercentage: e.target.value ? parseFloat(e.target.value) : undefined,
-                      })
-                    }
-                    required
-                  />
-                </div>
-
-                <div className="min-w-0 space-y-2">
-                  <Label htmlFor="hsnCode">HSN Code *</Label>
-                  <Input
-                    id="hsnCode"
-                    value={formData.hsnCode || ""}
-                    onChange={(e) =>
-                      setFormData({ ...formData, hsnCode: e.target.value })
-                    }
-                    required
-                  />
-                </div>
-
-                <div className="min-w-0 space-y-2">
-                  <Label htmlFor="currency">Currency *</Label>
-                  <Input
-                    id="currency"
-                    value={formData.currency || "INR"}
-                    onChange={(e) =>
-                      setFormData({ ...formData, currency: e.target.value })
-                    }
-                    required
-                  />
-                </div>
-
-                <div className="min-w-0 space-y-2">
-                  <Label htmlFor="discountPrice">Discount Price</Label>
-                  <Input
-                    id="discountPrice"
-                    type="number"
-                    step="0.01"
-                    value={formData.discountPrice ?? ""}
-                    onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        discountPrice: e.target.value ? parseFloat(e.target.value) : undefined,
-                      })
-                    }
-                  />
-                </div>
-
-                <div className="min-w-0 space-y-2 sm:col-span-2">
-                  <label className="flex items-center gap-2 rounded-md border px-3 py-2 text-sm">
-                    <input
-                      id="taxInclusive"
-                      type="checkbox"
-                      checked={Boolean(formData.taxInclusive)}
-                      onChange={(e) =>
-                        setFormData({ ...formData, taxInclusive: e.target.checked })
-                      }
-                    />
-                    <span>Tax Inclusive</span>
-                  </label>
-                </div>
-              </div>
-            </div>
-
-            {/* Inventory */}
-            <div className="min-w-0 space-y-4 rounded-lg border p-4">
-              <h3 className="font-semibold">Inventory</h3>
-
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <div className="min-w-0 space-y-2">
-                  <Label htmlFor="stockQuantity">Stock Quantity *</Label>
-                  <Input
-                    id="stockQuantity"
-                    type="number"
-                    value={formData.stockQuantity}
-                    onChange={(e) =>
-                      setFormData({ ...formData, stockQuantity: parseInt(e.target.value) })
-                    }
-                    required
-                  />
-                </div>
-
-                <div className="min-w-0 space-y-2">
-                  <Label htmlFor="stockStatus">Stock Status *</Label>
-                  <Select
-                    value={formData.stockStatus}
-                    onValueChange={(value: "in-stock" | "out-of-stock" | "pre-order") =>
-                      setFormData({ ...formData, stockStatus: value })
-                    }
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="in-stock">In Stock</SelectItem>
-                      <SelectItem value="out-of-stock">Out of Stock</SelectItem>
-                      <SelectItem value="pre-order">Pre Order</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
               </div>
             </div>
 

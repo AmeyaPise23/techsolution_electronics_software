@@ -191,45 +191,6 @@ function buildProductFormData(data: ProductFormData): FormData {
   formData.append("brand", data.brand || "");
   formData.append("description", data.description);
   formData.append("fullDescription", data.fullDescription || "");
-  formData.append("price", String(data.price));
-  formData.append("stockQuantity", String(data.stockQuantity));
-  formData.append("stockStatus", data.stockStatus);
-
-  if (data.purchasePrice !== undefined) {
-    formData.append("purchasePrice", String(data.purchasePrice));
-  }
-
-  if (data.landingCost !== undefined) {
-    formData.append("landingCost", String(data.landingCost));
-  }
-
-  if (data.mrp !== undefined) {
-    formData.append("mrp", String(data.mrp));
-  }
-
-  if (data.discountPrice !== undefined) {
-    formData.append("discountPrice", String(data.discountPrice));
-  }
-
-  if (data.taxPercentage !== undefined) {
-    formData.append("taxPercentage", String(data.taxPercentage));
-  }
-
-  if (data.hsnCode) {
-    formData.append("hsnCode", data.hsnCode);
-  }
-
-  if (data.currency) {
-    formData.append("currency", data.currency);
-  }
-
-  if (data.taxInclusive !== undefined) {
-    formData.append("taxInclusive", String(data.taxInclusive));
-  }
-
-  if (data.rating !== undefined) {
-    formData.append("rating", String(data.rating));
-  }
 
   if (data.metaTitle) {
     formData.append("metaTitle", data.metaTitle);

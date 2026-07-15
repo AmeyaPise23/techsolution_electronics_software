@@ -1,5 +1,5 @@
-import { useState, useEffect } from "react";
-import { Plus, Search, Pencil, Trash2, Eye } from "lucide-react";
+import { useState, useEffect, useCallback } from "react";
+import { Plus, Search, Pencil, Trash2, Eye, Package } from "lucide-react";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import {
@@ -27,40 +27,46 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "../components/ui/alert-dialog";
-import { Badge } from "../components/ui/badge";
 import { ProductFormDialog } from "../components/product-form-dialog";
+import { CreateCategoryDialog } from "../components/create-category-dialog";
+import { VariantFormDialog } from "../components/variant-form-dialog";
 import { productService, ProductFormData } from "../services/productService";
+import {
+  categoryService,
+  FlatCategory,
+} from "../services/categoryService";
 import { toast } from "sonner";
 import { useNavigate } from "react-router";
-
-const categories = [
-  "All Categories",
-  "Audio",
-  "Watches",
-  "Cameras",
-  "Home",
-  "Fitness",
-  "Computing",
-  "Gaming",
-  "Fashion",
-  "Beauty",
-];
 
 export function AdminProducts() {
   const navigate = useNavigate();
   const [products, setProducts] = useState<ProductFormData[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
-  const [selectedCategory, setSelectedCategory] = useState("All Categories");
+  const [flatCategories, setFlatCategories] = useState<FlatCategory[]>([]);
+  const [selectedCategory, setSelectedCategory] = useState("all");
   const [formDialogOpen, setFormDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [categoryDialogOpen, setCategoryDialogOpen] = useState(false);
+  const [variantDialogOpen, setVariantDialogOpen] = useState(false);
+  const [variantProduct, setVariantProduct] = useState<{ id: string; name: string } | null>(null);
   const [currentProduct, setCurrentProduct] = useState<ProductFormData | null>(null);
   const [productToDelete, setProductToDelete] = useState<string | null>(null);
   const [formMode, setFormMode] = useState<"create" | "edit">("create");
 
+  const loadCategories = useCallback(async () => {
+    try {
+      const cats = await categoryService.getAllFlatCategories();
+      setFlatCategories(cats);
+    } catch {
+      setFlatCategories([]);
+    }
+  }, []);
+
   useEffect(() => {
     loadProducts();
-  }, []);
+    loadCategories();
+  }, [loadCategories]);
 
   const loadProducts = async () => {
     try {
@@ -89,6 +95,11 @@ export function AdminProducts() {
 
   const handleViewProduct = (productId: string) => {
     navigate(`/products/${productId}`);
+  };
+
+  const handleManageVariants = (product: ProductFormData) => {
+    setVariantProduct({ id: product.id!, name: product.name });
+    setVariantDialogOpen(true);
   };
 
   const handleDeleteClick = (productId: string) => {
@@ -136,29 +147,15 @@ export function AdminProducts() {
     }
   };
 
-  // Filter products
   const filteredProducts = products.filter((product) => {
     const matchesSearch =
       product.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       product.sku.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesCategory =
-      selectedCategory === "All Categories" ||
+      selectedCategory === "all" ||
       product.category === selectedCategory;
     return matchesSearch && matchesCategory;
   });
-
-  const getStockBadge = (status: string) => {
-    switch (status) {
-      case "in-stock":
-        return <Badge variant="default">In Stock</Badge>;
-      case "out-of-stock":
-        return <Badge variant="destructive">Out of Stock</Badge>;
-      case "pre-order":
-        return <Badge variant="secondary">Pre Order</Badge>;
-      default:
-        return <Badge variant="outline">{status}</Badge>;
-    }
-  };
 
   return (
     <div className="p-6 space-y-6">
@@ -167,7 +164,7 @@ export function AdminProducts() {
         <div>
           <h1 className="mb-1">Product Management</h1>
           <p className="text-muted-foreground">
-            Manage your product catalog and inventory
+            Manage your product catalog, categories and variants
           </p>
         </div>
         <div className="flex w-full flex-col gap-2 sm:w-auto">
@@ -175,7 +172,7 @@ export function AdminProducts() {
             <Plus className="size-4 mr-2" />
             Add Product
           </Button>
-          <Button type="button" variant="outline">
+          <Button type="button" variant="outline" onClick={() => setCategoryDialogOpen(true)}>
             <Plus className="size-4 mr-2" />
             Add Category
           </Button>
@@ -194,13 +191,14 @@ export function AdminProducts() {
           />
         </div>
         <Select value={selectedCategory} onValueChange={setSelectedCategory}>
-          <SelectTrigger className="w-full sm:w-[200px]">
+          <SelectTrigger className="w-full sm:w-[250px]">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            {categories.map((cat) => (
-              <SelectItem key={cat} value={cat}>
-                {cat}
+            <SelectItem value="all">All Categories</SelectItem>
+            {flatCategories.map((cat) => (
+              <SelectItem key={cat.id} value={cat.name}>
+                {"  ".repeat(cat.depth)}{cat.depth > 0 ? "└ " : ""}{cat.name}
               </SelectItem>
             ))}
           </SelectContent>
@@ -208,22 +206,14 @@ export function AdminProducts() {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div className="p-4 rounded-lg border border-border bg-card">
           <p className="text-sm text-muted-foreground">Total Products</p>
           <p className="text-2xl font-bold mt-1">{products.length}</p>
         </div>
         <div className="p-4 rounded-lg border border-border bg-card">
-          <p className="text-sm text-muted-foreground">In Stock</p>
-          <p className="text-2xl font-bold mt-1">
-            {products.filter((p) => p.stockStatus === "in-stock").length}
-          </p>
-        </div>
-        <div className="p-4 rounded-lg border border-border bg-card">
-          <p className="text-sm text-muted-foreground">Out of Stock</p>
-          <p className="text-2xl font-bold mt-1">
-            {products.filter((p) => p.stockStatus === "out-of-stock").length}
-          </p>
+          <p className="text-sm text-muted-foreground">Categories</p>
+          <p className="text-2xl font-bold mt-1">{flatCategories.length}</p>
         </div>
       </div>
 
@@ -237,9 +227,7 @@ export function AdminProducts() {
                 <TableHead>Product Name</TableHead>
                 <TableHead>SKU</TableHead>
                 <TableHead>Category</TableHead>
-                <TableHead>Price</TableHead>
-                <TableHead>Stock</TableHead>
-                <TableHead>Status</TableHead>
+                <TableHead>Brand</TableHead>
                 <TableHead>Created</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
@@ -247,13 +235,13 @@ export function AdminProducts() {
             <TableBody>
               {loading ? (
                 <TableRow>
-                  <TableCell colSpan={9} className="text-center py-8">
+                  <TableCell colSpan={7} className="text-center py-8">
                     Loading products...
                   </TableCell>
                 </TableRow>
               ) : filteredProducts.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={9} className="text-center py-8">
+                  <TableCell colSpan={7} className="text-center py-8">
                     <div className="flex flex-col items-center gap-2">
                       <p className="text-muted-foreground">No products found</p>
                       {products.length === 0 && (
@@ -286,16 +274,24 @@ export function AdminProducts() {
                       {product.sku}
                     </TableCell>
                     <TableCell>{product.category}</TableCell>
-                    <TableCell>${product.price.toFixed(2)}</TableCell>
-                    <TableCell>{product.stockQuantity}</TableCell>
-                    <TableCell>{getStockBadge(product.stockStatus)}</TableCell>
+                    <TableCell className="text-muted-foreground">
+                      {product.brand || "-"}
+                    </TableCell>
                     <TableCell className="text-muted-foreground">
                       {product.createdAt
                         ? new Date(product.createdAt).toLocaleDateString()
                         : "-"}
                     </TableCell>
                     <TableCell className="text-right">
-                      <div className="flex items-center justify-end gap-2">
+                      <div className="flex items-center justify-end gap-1">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => handleManageVariants(product)}
+                          title="Manage Variants"
+                        >
+                          <Package className="size-4" />
+                        </Button>
                         <Button
                           variant="ghost"
                           size="icon"
@@ -339,6 +335,22 @@ export function AdminProducts() {
         mode={formMode}
       />
 
+      <CreateCategoryDialog
+        open={categoryDialogOpen}
+        onClose={() => setCategoryDialogOpen(false)}
+        onCategoryCreated={() => loadCategories()}
+      />
+
+      {/* Variant Management Dialog */}
+      {variantProduct && (
+        <VariantFormDialog
+          open={variantDialogOpen}
+          onOpenChange={setVariantDialogOpen}
+          productId={variantProduct.id}
+          productName={variantProduct.name}
+        />
+      )}
+
       {/* Delete Confirmation Dialog */}
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <AlertDialogContent>
@@ -346,7 +358,7 @@ export function AdminProducts() {
             <AlertDialogTitle>Are you sure?</AlertDialogTitle>
             <AlertDialogDescription>
               This action cannot be undone. This will permanently delete the
-              product from your catalog.
+              product and all its variants from your catalog.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
