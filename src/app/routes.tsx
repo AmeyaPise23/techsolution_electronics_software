@@ -21,6 +21,12 @@ import { RepairOrdersDashboard } from "./pages/repair-orders-dashboard";
 import { RepairOrdersList } from "./pages/repair-orders-list";
 import { RepairOrderCreate } from "./pages/repair-order-create";
 import { RepairOrderView } from "./pages/repair-order-view";
+import { SalesOverview } from "./pages/sales-overview";
+import { SalesClients } from "./pages/sales-clients";
+import { SalesQuotations } from "./pages/sales-quotations";
+import { QuotationCreate } from "./pages/quotation-create";
+import { QuotationView } from "./pages/quotation-view";
+import { AdminCategories } from "./pages/admin-categories";
 import { AdminLogin } from "./pages/admin-login";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 
@@ -62,6 +68,34 @@ export const router = createBrowserRouter([
       {
         path: "products",
         Component: AdminProducts,
+      },
+      {
+        path: "sales/overview",
+        Component: SalesOverview,
+      },
+      {
+        path: "clients",
+        Component: SalesClients,
+      },
+      {
+        path: "categories",
+        Component: AdminCategories,
+      },
+      {
+        path: "quotations",
+        Component: SalesQuotations,
+      },
+      {
+        path: "quotations/create",
+        Component: QuotationCreate,
+      },
+      {
+        path: "quotations/:id",
+        Component: QuotationView,
+      },
+      {
+        path: "quotations/:id/edit",
+        Component: QuotationCreate,
       },
       {
         path: "orders",
