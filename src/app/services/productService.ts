@@ -1,3 +1,120 @@
+export interface VariantChip {
+  id: string;
+  name: string;
+  price: number;
+  stockStatus: string;
+}
+
+export interface ProductListingItem {
+  id: string;
+  name: string;
+  brand: string;
+  category: string;
+  description: string;
+  sku: string;
+  price: number;
+  discountPrice?: number;
+  rating: number;
+  reviewCount: number;
+  stockQuantity: number;
+  stockStatus: string;
+  primaryImageId: number | null;
+  startingPrice: number;
+  variantCount: number;
+  variants: VariantChip[];
+}
+
+export interface FilterOptions {
+  brands: string[];
+  categories: string[];
+}
+
+export interface PagedProductResponse {
+  products: ProductListingItem[];
+  page: number;
+  size: number;
+  totalElements: number;
+  totalPages: number;
+  hasNext: boolean;
+  hasPrevious: boolean;
+  filters: FilterOptions;
+}
+
+export interface ProductListingParams {
+  q?: string;
+  category?: string;
+  brand?: string;
+  minPrice?: number;
+  maxPrice?: number;
+  inStock?: boolean;
+  sort?: string;
+  page?: number;
+  size?: number;
+}
+
+export interface ProductDetailImage {
+  id: number;
+  fileName: string;
+  primary: boolean;
+  sortOrder: number;
+  altText: string | null;
+}
+
+export interface ProductDetailVariant {
+  id: string;
+  variantName: string;
+  sku: string;
+  color: string | null;
+  size: string | null;
+  material: string | null;
+  weight: string | null;
+  purchasePrice: number | null;
+  landingCost: number | null;
+  mrp: number | null;
+  price: number;
+  discountPrice: number | null;
+  taxPercentage: number | null;
+  hsnCode: string | null;
+  currency: string;
+  taxInclusive: boolean;
+  stockQuantity: number;
+  stockStatus: string;
+  active: boolean;
+}
+
+export interface ProductDetailReview {
+  id: number;
+  name: string;
+  rating: number;
+  reviewDate: string;
+  comment: string;
+}
+
+export interface ProductDetail {
+  id: string;
+  name: string;
+  sku: string;
+  brand: string;
+  category: string;
+  description: string;
+  fullDescription: string;
+  price: number;
+  discountPrice: number | null;
+  taxPercentage: number | null;
+  rating: number;
+  reviewCount: number;
+  stockQuantity: number;
+  stockStatus: string;
+  metaTitle: string | null;
+  metaDescription: string | null;
+  createdAt: string;
+  images: ProductDetailImage[];
+  features: string[];
+  specifications: { label: string; value: string }[];
+  variants: ProductDetailVariant[];
+  reviews: ProductDetailReview[];
+}
+
 export interface ProductFormData {
   id?: string;
   name: string;
@@ -89,8 +206,14 @@ const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8080/api";
 
 const PRODUCT_LIST_URL = `${API_BASE_URL}/products/products/list.json`;
+const PRODUCT_LISTING_URL = `${API_BASE_URL}/products`;
 const PRODUCT_CREATE_URL = `${API_BASE_URL}/products/save/product`;
-const PRODUCT_DELETE_URL = `${API_BASE_URL}/products/delete/product`;
+const PRODUCT_DELETE_URL = `${API_BASE_URL}/products`;
+
+export function getProductImageUrl(imageId: number | null): string {
+  if (!imageId) return "";
+  return `${API_BASE_URL}/products/images/${imageId}`;
+}
 
 function toNumber(value: number | string | undefined, fallback = 0): number {
   if (typeof value === "number") return value;
@@ -221,8 +344,30 @@ function buildProductFormData(data: ProductFormData): FormData {
 }
 
 export const productService = {
+  async getProductListing(params?: ProductListingParams): Promise<PagedProductResponse> {
+    const url = new URL(PRODUCT_LISTING_URL);
+    if (params) {
+      if (params.q) url.searchParams.set("q", params.q);
+      if (params.category) url.searchParams.set("category", params.category);
+      if (params.brand) url.searchParams.set("brand", params.brand);
+      if (params.minPrice != null) url.searchParams.set("minPrice", String(params.minPrice));
+      if (params.maxPrice != null) url.searchParams.set("maxPrice", String(params.maxPrice));
+      if (params.inStock != null) url.searchParams.set("inStock", String(params.inStock));
+      if (params.sort) url.searchParams.set("sort", params.sort);
+      if (params.page != null) url.searchParams.set("page", String(params.page));
+      if (params.size != null) url.searchParams.set("size", String(params.size));
+    }
+    const response = await fetch(url.toString());
+    return parseApiResponse<PagedProductResponse>(response);
+  },
+
   async getAllProducts(): Promise<ProductFormData[]> {
     return this.listProducts();
+  },
+
+  async getProductDetail(id: string): Promise<ProductDetail> {
+    const response = await fetch(`${PRODUCT_LISTING_URL}/${id}`);
+    return parseApiResponse<ProductDetail>(response);
   },
 
   async getProductById(id: string): Promise<ProductFormData | null> {
@@ -262,13 +407,11 @@ export const productService = {
 
   async deleteProduct(id: string): Promise<void> {
     const token = localStorage.getItem("auth_token");
-    const response = await fetch(PRODUCT_DELETE_URL, {
+    const response = await fetch(`${PRODUCT_DELETE_URL}/${id}`, {
       method: "DELETE",
       headers: {
         Authorization: `Bearer ${token}`,
-        "Content-Type": "text/plain",
       },
-      body: id,
     });
 
     await parseApiResponse<ApiResponse<void>>(response);

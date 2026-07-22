@@ -4,10 +4,12 @@ import { Input } from "./ui/input";
 import { Button } from "./ui/button";
 import { useState } from "react";
 import { useAuth } from "../context/AuthContext";
+import { useCart } from "../context/cart-context";
 
 export function Navbar() {
   const navigate = useNavigate();
   const { isAuthenticated } = useAuth();
+  const { totalItems } = useCart();
   const [searchQuery, setSearchQuery] = useState("");
 
   const handleAdminClick = () => {
@@ -52,11 +54,18 @@ export function Navbar() {
             >
               <LayoutDashboard className="size-5" />
             </Button>
-            <Button variant="ghost" size="icon" className="relative">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="relative"
+              onClick={() => navigate("/cart")}
+            >
               <ShoppingCart className="size-5" />
-              <span className="absolute -top-1 -right-1 size-5 rounded-full bg-primary text-primary-foreground text-xs flex items-center justify-center">
-                3
-              </span>
+              {totalItems > 0 && (
+                <span className="absolute -top-1 -right-1 size-5 rounded-full bg-primary text-primary-foreground text-xs flex items-center justify-center">
+                  {totalItems > 99 ? "99+" : totalItems}
+                </span>
+              )}
             </Button>
             <Button variant="ghost" size="icon">
               <User className="size-5" />

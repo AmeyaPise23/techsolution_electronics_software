@@ -29,6 +29,9 @@ import { QuotationView } from "./pages/quotation-view";
 import { AdminCategories } from "./pages/admin-categories";
 import { AdminLogin } from "./pages/admin-login";
 import { ProtectedRoute } from "./components/ProtectedRoute";
+import { Cart } from "./pages/cart";
+import { Checkout } from "./pages/checkout";
+import { QuotationConfirmation } from "./pages/quotation-confirmation";
 
 export const router = createBrowserRouter([
   {
@@ -46,6 +49,18 @@ export const router = createBrowserRouter([
       {
         path: "products/:id",
         Component: ProductDetails,
+      },
+      {
+        path: "cart",
+        Component: Cart,
+      },
+      {
+        path: "checkout",
+        Component: Checkout,
+      },
+      {
+        path: "quotation/:id",
+        Component: QuotationConfirmation,
       },
     ],
   },
