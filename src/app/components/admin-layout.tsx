@@ -73,7 +73,6 @@ const financeNav: NavSection = {
     { name: "Revenue", href: "/admin/finance/revenue", icon: TrendingUp },
     { name: "Expenses", href: "/admin/finance/expenses", icon: Receipt },
     { name: "Profit", href: "/admin/finance/profit", icon: PieChart },
-    { name: "Outsourcing", href: "/admin/finance/outsourcing", icon: Users },
     { name: "Cash Flow", href: "/admin/finance/cashflow", icon: Wallet },
     { name: "Reports", href: "/admin/finance/reports", icon: FileText },
   ],
@@ -86,6 +85,7 @@ const repairNav: NavSection = {
     { name: "Dashboard", href: "/admin/repair-orders", icon: LayoutDashboard },
     { name: "All Orders", href: "/admin/repair-orders/list", icon: ListOrdered },
     { name: "New Order", href: "/admin/repair-orders/create", icon: ClipboardList },
+    { name: "Outsourcing", href: "/admin/repair-orders/outsourcing", icon: Users },
   ],
 };
 

@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router";
 import { financeService, Invoice } from "../services/financeService";
 import { Button } from "../components/ui/button";
-import { ArrowLeft, Download, Printer } from "lucide-react";
+import { ArrowLeft, Download, Pencil, Printer } from "lucide-react";
 import { Card } from "../components/ui/card";
 import { Badge } from "../components/ui/badge";
 import { toast } from "sonner";
@@ -119,6 +119,17 @@ export function FinanceInvoiceView() {
         </div>
 
         <div className="flex gap-2">
+          {invoice.status !== "paid" && invoice.status !== "cancelled" && (
+            <Button
+              variant="outline"
+              onClick={() =>
+                navigate(`/admin/finance/invoices/${invoice.id}/edit`)
+              }
+            >
+              <Pencil className="size-4 mr-2" />
+              Edit
+            </Button>
+          )}
           <Button variant="outline" onClick={handlePrint}>
             <Printer className="size-4 mr-2" />
             Print

@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { useNavigate } from "react-router";
+import { useEffect, useState } from "react";
+import { useNavigate, useParams } from "react-router";
 import { financeService, Invoice } from "../services/financeService";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
@@ -36,6 +36,10 @@ const DEFAULT_TERMS = `1. Warranty - 3 Months from Date of Invoice
 
 export function FinanceInvoiceCreate() {
   const navigate = useNavigate();
+  const { id: editingId } = useParams();
+  const isEditing = !!editingId;
+  const [loadingInvoice, setLoadingInvoice] = useState<boolean>(isEditing);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [customer, setCustomer] = useState({
     name: "",
     company: "",
@@ -85,6 +89,91 @@ export function FinanceInvoiceCreate() {
 
   const [autoRoundOff, setAutoRoundOff] = useState(true);
   const [paymentAmount, setPaymentAmount] = useState(0);
+
+  // ── Edit-mode loader ──
+  useEffect(() => {
+    if (!editingId) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        setLoadingInvoice(true);
+        setLoadError(null);
+        const inv = await financeService.getInvoiceById(editingId);
+        if (cancelled) return;
+        if (!inv) {
+          setLoadError(`Invoice #${editingId} not found`);
+          return;
+        }
+        setCustomer({
+          name: inv.customer?.name ?? "",
+          company: inv.customer?.company ?? "",
+          email: inv.customer?.email ?? "",
+          phone: inv.customer?.phone ?? "",
+          address: inv.customer?.address ?? "",
+          gstNumber: inv.customer?.gstNumber ?? "",
+        });
+        const prefix = inv.invoicePrefix ?? "";
+        const numberOnly =
+          prefix && inv.invoiceNumber?.startsWith(prefix)
+            ? inv.invoiceNumber.slice(prefix.length)
+            : inv.invoiceNumber ?? "";
+        setInvoiceInfo({
+          invoicePrefix: prefix || "TS/26-27/",
+          invoiceNumber: numberOnly,
+          invoiceDate: inv.invoiceDate ?? new Date().toISOString().split("T")[0],
+          paymentTermsDays: inv.paymentTermsDays ?? 30,
+          dueDate: inv.dueDate ?? new Date().toISOString().split("T")[0],
+          poNumber: inv.poNumber ?? "",
+          poDate: inv.poDate ?? "",
+          ewayBillNo: inv.ewayBillNo ?? "",
+          vehicleNo: inv.vehicleNo ?? "",
+        });
+        setItems(
+          (inv.items ?? []).length > 0
+            ? inv.items.map((it) => ({
+                productName: it.productName ?? "",
+                hsnSac: it.hsnSac ?? "",
+                quantity: it.quantity ?? 1,
+                unitPrice: it.unitPrice ?? 0,
+                discount: it.discount ?? 0,
+                gst: it.gst ?? 0,
+                total: it.total ?? 0,
+              }))
+            : [
+                {
+                  productName: "",
+                  hsnSac: "",
+                  quantity: 1,
+                  unitPrice: 0,
+                  discount: 0,
+                  gst: 18,
+                  total: 0,
+                },
+              ]
+        );
+        setNotes(inv.notes ?? "");
+        setShowNotes(!!inv.notes);
+        setTermsAndConditions(inv.termsAndConditions ?? DEFAULT_TERMS);
+        if ((inv.additionalCharges ?? 0) > 0) {
+          setShowAdditionalCharges(true);
+          setAdditionalCharges(inv.additionalCharges ?? 0);
+        }
+        setPaymentAmount(inv.paymentAmount ?? 0);
+      } catch (e) {
+        if (!cancelled) {
+          const msg =
+            e instanceof Error ? e.message : "Failed to load invoice for editing";
+          toast.error(msg);
+          setLoadError(msg);
+        }
+      } finally {
+        if (!cancelled) setLoadingInvoice(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [editingId]);
 
   const addItem = () => {
     setItems([
@@ -234,9 +323,19 @@ export function FinanceInvoiceCreate() {
         status,
       } as Omit<Invoice, "id">;
 
-      await financeService.createInvoice(invoice);
-      toast.success(`Invoice ${status === "draft" ? "saved as draft" : "created"} successfully`);
-      navigate("/admin/finance/invoices");
+      if (isEditing && editingId) {
+        await financeService.updateInvoice(editingId, invoice);
+        toast.success(
+          `Invoice ${status === "draft" ? "saved as draft" : "updated"} successfully`
+        );
+        navigate(`/admin/finance/invoices/${editingId}`);
+      } else {
+        await financeService.createInvoice(invoice);
+        toast.success(
+          `Invoice ${status === "draft" ? "saved as draft" : "created"} successfully`
+        );
+        navigate("/admin/finance/invoices");
+      }
     } catch (error) {
       console.error("Error creating invoice:", error);
       toast.error(error instanceof Error ? error.message : "Failed to create invoice");
@@ -251,6 +350,25 @@ export function FinanceInvoiceCreate() {
     }).format(value);
   };
 
+  if (isEditing && loadError) {
+    return (
+      <div className="p-6 space-y-4">
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => navigate("/admin/finance/invoices")}
+        >
+          <ArrowLeft className="size-4 mr-2" />
+          Back to invoices
+        </Button>
+        <div className="rounded-md border border-destructive/30 bg-destructive/5 p-4 text-sm">
+          <div className="font-medium">Could not open invoice for editing</div>
+          <div className="text-muted-foreground mt-1">{loadError}</div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="p-6 space-y-6">
       {/* Header */}
@@ -263,8 +381,16 @@ export function FinanceInvoiceCreate() {
           <ArrowLeft className="size-5" />
         </Button>
         <div>
-          <h1 className="mb-1">Create Invoice</h1>
-          <p className="text-muted-foreground">Generate a new invoice for your customer</p>
+          <h1 className="mb-1">
+            {isEditing ? "Edit Invoice" : "Create Invoice"}
+          </h1>
+          <p className="text-muted-foreground">
+            {isEditing
+              ? loadingInvoice
+                ? "Loading invoice…"
+                : "Review and modify the invoice before saving."
+              : "Generate a new invoice for your customer"}
+          </p>
         </div>
       </div>
 
@@ -650,13 +776,32 @@ export function FinanceInvoiceCreate() {
 
           {/* Actions */}
           <div className="flex gap-3 justify-end">
-            <Button variant="outline" onClick={() => navigate("/admin/finance/invoices")}>
+            <Button
+              variant="outline"
+              onClick={() =>
+                navigate(
+                  isEditing && editingId
+                    ? `/admin/finance/invoices/${editingId}`
+                    : "/admin/finance/invoices"
+                )
+              }
+              disabled={loadingInvoice}
+            >
               Cancel
             </Button>
-            <Button variant="outline" onClick={() => handleSave("draft")}>
+            <Button
+              variant="outline"
+              onClick={() => handleSave("draft")}
+              disabled={loadingInvoice}
+            >
               Save as Draft
             </Button>
-            <Button onClick={() => handleSave("generated")}>Create Invoice</Button>
+            <Button
+              onClick={() => handleSave("generated")}
+              disabled={loadingInvoice}
+            >
+              {isEditing ? "Save Invoice" : "Create Invoice"}
+            </Button>
           </div>
         </div>
 

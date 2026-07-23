@@ -280,7 +280,14 @@ export function FinanceInvoices() {
                         <Button
                           variant="ghost"
                           size="icon"
+                          onClick={() =>
+                            navigate(`/admin/finance/invoices/${invoice.id}/edit`)
+                          }
                           title="Edit"
+                          disabled={
+                            invoice.status === "paid" ||
+                            invoice.status === "cancelled"
+                          }
                         >
                           <Pencil className="size-4" />
                         </Button>

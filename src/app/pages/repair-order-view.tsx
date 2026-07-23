@@ -1,66 +1,161 @@
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router";
-import { repairOrderService, RepairOrder, RepairStatus } from "../services/repairOrderService";
+import { repairService, RepairOrderDetail } from "../services/repairService";
 import { Button } from "../components/ui/button";
-import { ArrowLeft, Pencil, Printer, CheckCircle, Clock } from "lucide-react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../components/ui/card";
+import {
+  ArrowLeft,
+  Pencil,
+  Printer,
+  Wrench,
+  User,
+  Package,
+  MessageSquare,
+  Activity,
+  IndianRupee,
+  Truck,
+  FileText,
+} from "lucide-react";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "../components/ui/card";
 import { Badge } from "../components/ui/badge";
 import { Separator } from "../components/ui/separator";
+import { toast } from "sonner";
 
-const STATUS_LABELS: Record<RepairStatus, string> = {
-  "received": "Received",
-  "inspection-pending": "Inspection Pending",
-  "under-diagnosis": "Under Diagnosis",
-  "waiting-for-parts": "Waiting for Parts",
-  "in-repair": "In Repair",
-  "outsourced": "Outsourced",
-  "quality-check": "Quality Check",
-  "completed": "Completed",
-  "ready-for-delivery": "Ready for Delivery",
-  "delivered": "Delivered",
-  "closed": "Closed",
+const STATUS_LABELS: Record<string, string> = {
+  received: "Received",
+  inspection: "Inspection",
+  waiting_for_customer_approval: "Waiting for Approval",
+  waiting_for_parts: "Waiting for Parts",
+  under_repair: "Under Repair",
+  testing: "Testing",
+  quality_check: "Quality Check",
+  ready_for_delivery: "Ready for Delivery",
+  delivered: "Delivered",
+  completed: "Completed",
+  cancelled: "Cancelled",
 };
+
+const STATUS_VARIANTS: Record<
+  string,
+  "default" | "secondary" | "destructive" | "outline"
+> = {
+  received: "outline",
+  inspection: "secondary",
+  waiting_for_customer_approval: "outline",
+  waiting_for_parts: "outline",
+  under_repair: "default",
+  testing: "secondary",
+  quality_check: "secondary",
+  ready_for_delivery: "default",
+  delivered: "default",
+  completed: "default",
+  cancelled: "destructive",
+};
+
+const ACTION_LABELS: Record<string, string> = {
+  created: "Created",
+  updated: "Updated",
+  status_changed: "Status changed",
+  priority_changed: "Priority changed",
+  engineer_assigned: "Engineer assigned",
+  item_added: "Item added",
+  item_removed: "Item removed",
+  item_updated: "Item updated",
+  observation_added: "Observation added",
+  cost_updated: "Cost updated",
+  sent_to_vendor: "Sent to vendor",
+  returned_from_vendor: "Returned from vendor",
+  converted_to_invoice: "Converted to invoice",
+  cancelled: "Cancelled",
+  delivered: "Delivered",
+  completed: "Completed",
+};
+
+const OBSERVATION_LABELS: Record<string, string> = {
+  customer_complaint: "Customer complaint",
+  initial_inspection: "Initial inspection",
+  diagnosis: "Diagnosis",
+  repair_action: "Repair action",
+  part_replacement: "Part replacement",
+  testing: "Testing",
+  quality_check: "Quality check",
+  completion_note: "Completion note",
+  general_note: "General note",
+};
+
+const fmtStatus = (s?: string) => (s ? STATUS_LABELS[s] || s : "-");
+const fmtDate = (d?: string) =>
+  d ? new Date(d).toLocaleDateString("en-IN") : "-";
+const fmtDateTime = (d?: string) =>
+  d
+    ? new Date(d).toLocaleString("en-IN", {
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      })
+    : "-";
+const fmtMoney = (v?: number) =>
+  new Intl.NumberFormat("en-IN", {
+    style: "currency",
+    currency: "INR",
+    maximumFractionDigits: 2,
+  }).format(v ?? 0);
+
+function Field({ label, value }: { label: string; value?: React.ReactNode }) {
+  const isEmpty =
+    value === undefined ||
+    value === null ||
+    value === "" ||
+    value === false;
+  return (
+    <div className="space-y-1">
+      <div className="text-xs uppercase tracking-wide text-muted-foreground">
+        {label}
+      </div>
+      <div className="text-sm">{isEmpty ? "-" : value}</div>
+    </div>
+  );
+}
 
 export function RepairOrderView() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const [order, setOrder] = useState<RepairOrder | null>(null);
+  const [order, setOrder] = useState<RepairOrderDetail | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (id) {
-      loadOrder(id);
-    }
+    if (!id) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        setLoading(true);
+        setLoadError(null);
+        const data = await repairService.get(Number(id));
+        if (!cancelled) setOrder(data);
+      } catch (e) {
+        if (!cancelled) {
+          const msg =
+            e instanceof Error ? e.message : "Failed to load repair order";
+          toast.error(msg);
+          setLoadError(msg);
+          setOrder(null);
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, [id]);
-
-  const loadOrder = async (orderId: string) => {
-    try {
-      setLoading(true);
-      const data = await repairOrderService.getRepairOrderById(orderId);
-      setOrder(data);
-    } catch (error) {
-      console.error("Failed to load repair order:", error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat("en-US", {
-      style: "currency",
-      currency: "USD",
-    }).format(value);
-  };
-
-  const formatDateTime = (dateString: string) => {
-    return new Date(dateString).toLocaleString("en-US", {
-      month: "short",
-      day: "numeric",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  };
 
   if (loading) {
     return (
@@ -75,11 +170,33 @@ export function RepairOrderView() {
 
   if (!order) {
     return (
-      <div className="p-6">
-        <p className="text-muted-foreground">Repair order not found</p>
+      <div className="p-6 space-y-4">
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => navigate("/admin/repair-orders/list")}
+        >
+          <ArrowLeft className="size-4 mr-2" />
+          Back to list
+        </Button>
+        <div className="rounded-md border border-destructive/30 bg-destructive/5 p-4 text-sm">
+          <div className="font-medium">Could not load repair order #{id}</div>
+          <div className="text-muted-foreground mt-1">
+            {loadError ?? "Repair order not found."}
+          </div>
+        </div>
       </div>
     );
   }
+
+  const observations = [...(order.observations ?? [])].sort(
+    (a, b) =>
+      new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+  );
+  const activities = [...(order.activities ?? [])].sort(
+    (a, b) =>
+      new Date(b.performedAt).getTime() - new Date(a.performedAt).getTime()
+  );
 
   return (
     <div className="p-6 space-y-6">
@@ -94,8 +211,27 @@ export function RepairOrderView() {
             <ArrowLeft className="size-5" />
           </Button>
           <div>
-            <h1 className="mb-1">Repair Order {order.repairOrderNumber}</h1>
-            <p className="text-muted-foreground">View repair order details and history</p>
+            <div className="flex items-center gap-3 mb-1 flex-wrap">
+              <h1 className="m-0">{order.repairNumber}</h1>
+              <Badge variant={STATUS_VARIANTS[order.status] || "outline"}>
+                {fmtStatus(order.status)}
+              </Badge>
+              <Badge variant="outline">Priority: {order.priority}</Badge>
+              {order.outsourceStatus === "sent_to_vendor" && (
+                <Badge className="bg-amber-500 hover:bg-amber-500 text-white">
+                  <Truck className="size-3 mr-1" /> With Vendor
+                </Badge>
+              )}
+              {order.convertedInvoiceId && (
+                <Badge className="bg-green-600 hover:bg-green-600 text-white">
+                  <FileText className="size-3 mr-1" /> Invoiced ·{" "}
+                  {order.convertedInvoiceNumber}
+                </Badge>
+              )}
+            </div>
+            <p className="text-muted-foreground">
+              {order.owningCompany} · Received {fmtDate(order.receivedDate)}
+            </p>
           </div>
         </div>
 
@@ -104,328 +240,512 @@ export function RepairOrderView() {
             <Printer className="size-4 mr-2" />
             Print
           </Button>
-          <Button onClick={() => navigate(`/admin/repair-orders/${order.id}/edit`)}>
+          <Button
+            onClick={() => navigate(`/admin/repair-orders/${order.id}/edit`)}
+          >
             <Pencil className="size-4 mr-2" />
-            Edit
+            Open Workflow
           </Button>
         </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Main Content */}
+        {/* Main column */}
         <div className="lg:col-span-2 space-y-6">
-          {/* Customer Information */}
+          {/* Customer + Contact */}
           <Card>
             <CardHeader>
-              <CardTitle>Customer Information</CardTitle>
+              <CardTitle className="flex items-center gap-2">
+                <User className="size-4" /> Customer & Contact
+              </CardTitle>
             </CardHeader>
-            <CardContent className="space-y-3">
+            <CardContent className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <p className="text-sm text-muted-foreground">Company Name</p>
-                  <p className="font-medium">{order.customer.companyName}</p>
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">Contact Person</p>
-                  <p className="font-medium">{order.customer.contactPerson}</p>
-                </div>
+                <Field
+                  label="Customer"
+                  value={order.customerCompany || order.customerName}
+                />
+                <Field label="Customer ID" value={`#${order.customerId}`} />
               </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <p className="text-sm text-muted-foreground">Email</p>
-                  <p className="font-medium">{order.customer.email}</p>
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">Phone</p>
-                  <p className="font-medium">{order.customer.phone}</p>
-                </div>
-              </div>
-
-              <div>
-                <p className="text-sm text-muted-foreground">Address</p>
-                <p className="font-medium">{order.customer.address}</p>
-              </div>
+              {order.customerContact && (
+                <>
+                  <Separator />
+                  <div className="grid grid-cols-2 gap-4">
+                    <Field
+                      label="Contact Person"
+                      value={
+                        <>
+                          {order.customerContact.name}
+                          {order.customerContact.isPrimary && (
+                            <Badge variant="outline" className="ml-2">
+                              Primary
+                            </Badge>
+                          )}
+                        </>
+                      }
+                    />
+                    <Field
+                      label="Designation"
+                      value={order.customerContact.designation}
+                    />
+                    <Field
+                      label="Mobile"
+                      value={order.customerContact.mobile}
+                    />
+                    <Field
+                      label="Email"
+                      value={order.customerContact.email}
+                    />
+                  </div>
+                </>
+              )}
             </CardContent>
           </Card>
 
-          {/* Machine Information */}
+          {/* Device */}
           <Card>
             <CardHeader>
-              <CardTitle>Machine Information</CardTitle>
+              <CardTitle className="flex items-center gap-2">
+                <Wrench className="size-4" /> Device Details
+              </CardTitle>
             </CardHeader>
-            <CardContent className="space-y-3">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <p className="text-sm text-muted-foreground">Machine Name</p>
-                  <p className="font-medium">{order.machine.name}</p>
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">Manufacturer</p>
-                  <p className="font-medium">{order.machine.manufacturer}</p>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <p className="text-sm text-muted-foreground">Model Number</p>
-                  <p className="font-medium">{order.machine.modelNumber}</p>
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">Serial Number</p>
-                  <p className="font-medium">{order.machine.serialNumber}</p>
-                </div>
-              </div>
-
-              <div>
-                <p className="text-sm text-muted-foreground">Category</p>
-                <Badge variant="outline">{order.machine.category}</Badge>
-              </div>
+            <CardContent className="grid grid-cols-2 gap-4">
+              <Field label="Device Name" value={order.deviceName} />
+              <Field label="Category" value={order.machineCategoryName} />
+              <Field label="Manufacturer" value={order.deviceManufacturer} />
+              <Field label="Model" value={order.deviceModelNumber} />
+              <Field label="Serial Number" value={order.deviceSerialNumber} />
+              <Field label="Warranty Status" value={order.warrantyStatus} />
+              <Field
+                label="Warranty Expiry"
+                value={fmtDate(order.warrantyExpiry)}
+              />
+              <Field label="Warranty Note" value={order.warranty} />
             </CardContent>
           </Card>
 
-          {/* Service Information */}
+          {/* Service intake */}
           <Card>
             <CardHeader>
-              <CardTitle>Service Information</CardTitle>
+              <CardTitle>Service Intake</CardTitle>
+              <CardDescription>What the customer reported</CardDescription>
             </CardHeader>
-            <CardContent className="space-y-3">
-              <div>
-                <p className="text-sm text-muted-foreground">Problem Description</p>
-                <p className="font-medium">{order.service.problemDescription}</p>
-              </div>
+            <CardContent className="space-y-4">
+              <Field
+                label="Customer Complaint"
+                value={
+                  order.customerComplaint && (
+                    <span className="whitespace-pre-line">
+                      {order.customerComplaint}
+                    </span>
+                  )
+                }
+              />
+              <Field
+                label="Problem Description"
+                value={
+                  order.problemDescription && (
+                    <span className="whitespace-pre-line">
+                      {order.problemDescription}
+                    </span>
+                  )
+                }
+              />
+              <Field
+                label="Initial Inspection Notes"
+                value={
+                  order.initialInspectionNotes && (
+                    <span className="whitespace-pre-line">
+                      {order.initialInspectionNotes}
+                    </span>
+                  )
+                }
+              />
 
-              <div>
-                <p className="text-sm text-muted-foreground">Customer Complaint</p>
-                <p className="font-medium">{order.service.customerComplaint}</p>
-              </div>
-
-              {order.service.accessoriesReceived.length > 0 && (
+              {order.accessories && order.accessories.length > 0 && (
                 <div>
-                  <p className="text-sm text-muted-foreground mb-2">Accessories Received</p>
+                  <p className="text-xs uppercase tracking-wide text-muted-foreground mb-2">
+                    Accessories Received
+                  </p>
                   <div className="flex flex-wrap gap-2">
-                    {order.service.accessoriesReceived.map((acc, idx) => (
-                      <Badge key={idx} variant="secondary">
-                        {acc}
+                    {order.accessories.map((a) => (
+                      <Badge key={a.id} variant="secondary">
+                        {a.name}
                       </Badge>
                     ))}
                   </div>
                 </div>
               )}
+            </CardContent>
+          </Card>
 
-              {order.service.initialInspectionNotes && (
-                <div>
-                  <p className="text-sm text-muted-foreground">Initial Inspection Notes</p>
-                  <p className="font-medium">{order.service.initialInspectionNotes}</p>
+          {/* Products used */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Package className="size-4" /> Products / Parts Used
+              </CardTitle>
+              <CardDescription>
+                {order.items?.length ?? 0} item(s)
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {!order.items || order.items.length === 0 ? (
+                <p className="text-sm text-muted-foreground">
+                  No parts added yet.
+                </p>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="text-left border-b text-muted-foreground">
+                        <th className="py-2 pr-3">Product</th>
+                        <th className="py-2 pr-3">Qty</th>
+                        <th className="py-2 pr-3 text-right">Unit</th>
+                        <th className="py-2 pr-3 text-right">Discount</th>
+                        <th className="py-2 pr-3 text-right">Tax</th>
+                        <th className="py-2 pr-3 text-right">Line Total</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {order.items.map((it) => (
+                        <tr key={it.id} className="border-b last:border-0">
+                          <td className="py-2 pr-3">
+                            <div>{it.productName}</div>
+                            {it.variantName && (
+                              <div className="text-xs text-muted-foreground">
+                                {it.variantName}
+                              </div>
+                            )}
+                            {it.serialNumber && (
+                              <div className="text-xs text-muted-foreground">
+                                SN: {it.serialNumber}
+                              </div>
+                            )}
+                          </td>
+                          <td className="py-2 pr-3">
+                            {it.quantity} {it.unit || ""}
+                          </td>
+                          <td className="py-2 pr-3 text-right">
+                            {fmtMoney(it.unitPrice)}
+                          </td>
+                          <td className="py-2 pr-3 text-right">
+                            {fmtMoney(it.discountAmount)}
+                          </td>
+                          <td className="py-2 pr-3 text-right">
+                            {fmtMoney(it.taxAmount)}
+                          </td>
+                          <td className="py-2 pr-3 text-right font-medium">
+                            {fmtMoney(it.lineTotal)}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
               )}
             </CardContent>
           </Card>
 
-          {/* Technician Assignment */}
-          {order.assignment && (
+          {/* Outsourcing history */}
+          {(order.outsourcings ?? []).length > 0 && (
             <Card>
               <CardHeader>
-                <CardTitle>Technician Assignment</CardTitle>
+                <CardTitle className="flex items-center gap-2">
+                  <Truck className="size-4" /> Outsourcing History
+                </CardTitle>
+                <CardDescription>
+                  {order.outsourcings!.length} vendor trip
+                  {order.outsourcings!.length === 1 ? "" : "s"} — full audit
+                  trail preserved
+                </CardDescription>
               </CardHeader>
-              <CardContent className="space-y-3">
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <p className="text-sm text-muted-foreground">Engineer</p>
-                    <p className="font-medium">{order.assignment.engineer}</p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-muted-foreground">Technician</p>
-                    <p className="font-medium">{order.assignment.technician}</p>
-                  </div>
-                </div>
+              <CardContent className="space-y-4">
+                {[...(order.outsourcings ?? [])]
+                  .sort(
+                    (a, b) =>
+                      new Date(b.outsourceDate).getTime() -
+                      new Date(a.outsourceDate).getTime()
+                  )
+                  .map((leg) => {
+                    const isOpen = leg.status === "sent_to_vendor";
+                    const total = leg.totalCost ?? 0;
+                    return (
+                      <div
+                        key={leg.id}
+                        className={
+                          "rounded-md border p-3 space-y-2 " +
+                          (isOpen
+                            ? "border-amber-500/40 bg-amber-500/5"
+                            : "bg-muted/20")
+                        }
+                      >
+                        <div className="flex items-start justify-between gap-2 flex-wrap">
+                          <div>
+                            <p className="font-medium">
+                              {leg.vendorName ?? `Vendor #${leg.vendorId}`}
+                            </p>
+                            <p className="text-xs text-muted-foreground">
+                              Sent {fmtDate(leg.outsourceDate)}
+                              {leg.expectedReturnDate &&
+                                ` · Expected ${fmtDate(leg.expectedReturnDate)}`}
+                              {leg.actualReturnDate &&
+                                ` · Returned ${fmtDate(leg.actualReturnDate)}`}
+                            </p>
+                          </div>
+                          <Badge
+                            variant={isOpen ? "default" : "outline"}
+                            className={
+                              isOpen
+                                ? "bg-amber-500 hover:bg-amber-500 text-white"
+                                : ""
+                            }
+                          >
+                            {isOpen ? "With Vendor" : "Returned"}
+                          </Badge>
+                        </div>
 
-                <div>
-                  <p className="text-sm text-muted-foreground">Work Notes</p>
-                  <p className="font-medium">{order.assignment.workNotes}</p>
-                </div>
+                        {!isOpen && (
+                          <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
+                            <div>
+                              <p className="text-muted-foreground">
+                                Vendor Invoice
+                              </p>
+                              <p>{leg.vendorInvoiceNumber || "-"}</p>
+                            </div>
+                            <div>
+                              <p className="text-muted-foreground">
+                                Outsource Cost
+                              </p>
+                              <p>{fmtMoney(leg.outsourceCost)}</p>
+                            </div>
+                            <div>
+                              <p className="text-muted-foreground">
+                                Transport
+                              </p>
+                              <p>{fmtMoney(leg.transportCost)}</p>
+                            </div>
+                            <div>
+                              <p className="text-muted-foreground">
+                                Additional
+                              </p>
+                              <p>{fmtMoney(leg.additionalCharges)}</p>
+                            </div>
+                            <div className="col-span-2 md:col-span-4 flex justify-between border-t pt-1">
+                              <span className="text-muted-foreground">
+                                Trip total
+                              </span>
+                              <span className="font-medium">
+                                {fmtMoney(total)}
+                              </span>
+                            </div>
+                          </div>
+                        )}
 
-                <div>
-                  <p className="text-sm text-muted-foreground">Repair Summary</p>
-                  <p className="font-medium">{order.assignment.repairSummary}</p>
-                </div>
-
-                <div>
-                  <p className="text-sm text-muted-foreground">Time Spent</p>
-                  <p className="font-medium">{order.assignment.timeSpent} hours</p>
-                </div>
+                        {leg.remarks && (
+                          <p className="text-xs">
+                            <span className="text-muted-foreground">
+                              Sent notes:
+                            </span>{" "}
+                            <span className="italic">{leg.remarks}</span>
+                          </p>
+                        )}
+                        {leg.returnRemarks && (
+                          <p className="text-xs">
+                            <span className="text-muted-foreground">
+                              Return notes:
+                            </span>{" "}
+                            <span className="italic">{leg.returnRemarks}</span>
+                          </p>
+                        )}
+                      </div>
+                    );
+                  })}
               </CardContent>
             </Card>
           )}
 
-          {/* Parts Used */}
-          {order.partsUsed.length > 0 && (
-            <Card>
-              <CardHeader>
-                <CardTitle>Parts Used</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-2">
-                  {order.partsUsed.map((part, idx) => (
-                    <div key={idx} className="flex justify-between items-center py-2 border-b last:border-0">
-                      <div>
-                        <p className="font-medium">{part.partName}</p>
-                        <p className="text-sm text-muted-foreground">
-                          Qty: {part.quantity} × {formatCurrency(part.unitCost)}
-                        </p>
+          {/* Observations timeline */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <MessageSquare className="size-4" /> Repair Observations
+              </CardTitle>
+              <CardDescription>
+                Technical notes recorded chronologically
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {observations.length === 0 ? (
+                <p className="text-sm text-muted-foreground">
+                  No observations recorded yet.
+                </p>
+              ) : (
+                <div className="space-y-4">
+                  {observations.map((o) => (
+                    <div key={o.id} className="border-l-2 border-primary/40 pl-4">
+                      <div className="flex items-center justify-between gap-2">
+                        <Badge variant="outline">
+                          {OBSERVATION_LABELS[o.observationType] ||
+                            o.observationType}
+                        </Badge>
+                        <span className="text-xs text-muted-foreground">
+                          {fmtDateTime(o.createdAt)}
+                          {o.createdBy ? ` · ${o.createdBy}` : ""}
+                        </span>
                       </div>
-                      <p className="font-medium">{formatCurrency(part.totalCost)}</p>
+                      <p className="text-sm mt-2 whitespace-pre-line">
+                        {o.description}
+                      </p>
                     </div>
                   ))}
                 </div>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Outsourcing Details */}
-          {order.outsourcing && (
-            <Card>
-              <CardHeader>
-                <CardTitle>Outsourced Repair Details</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <p className="text-sm text-muted-foreground">Vendor Name</p>
-                    <p className="font-medium">{order.outsourcing.vendorName}</p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-muted-foreground">Service Type</p>
-                    <p className="font-medium">{order.outsourcing.serviceType}</p>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <p className="text-sm text-muted-foreground">Cost</p>
-                    <p className="font-medium">{formatCurrency(order.outsourcing.cost)}</p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-muted-foreground">Payment Status</p>
-                    <Badge variant={order.outsourcing.paymentStatus === "paid" ? "default" : "secondary"}>
-                      {order.outsourcing.paymentStatus}
-                    </Badge>
-                  </div>
-                </div>
-
-                <div>
-                  <p className="text-sm text-muted-foreground">Invoice Number</p>
-                  <p className="font-medium">{order.outsourcing.invoiceNumber}</p>
-                </div>
-              </CardContent>
-            </Card>
-          )}
+              )}
+            </CardContent>
+          </Card>
         </div>
 
-        {/* Sidebar */}
+        {/* Side column */}
         <div className="space-y-6">
-          {/* Status & Dates */}
+          {/* Assignment + dates */}
           <Card>
             <CardHeader>
-              <CardTitle>Status</CardTitle>
+              <CardTitle>Status & Assignment</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div>
-                <p className="text-sm text-muted-foreground mb-2">Current Status</p>
-                <Badge className="text-base px-3 py-1">
-                  {STATUS_LABELS[order.status]}
-                </Badge>
-              </div>
-
+              <Field
+                label="Status"
+                value={
+                  <Badge variant={STATUS_VARIANTS[order.status] || "outline"}>
+                    {fmtStatus(order.status)}
+                  </Badge>
+                }
+              />
+              <Field label="Priority" value={order.priority} />
+              <Field
+                label="Assigned Engineer"
+                value={order.assignedEngineer}
+              />
+              <Field label="Received By" value={order.receivedBy} />
               <Separator />
-
-              <div>
-                <p className="text-sm text-muted-foreground">Received Date</p>
-                <p className="font-medium">{new Date(order.receivedDate).toLocaleDateString()}</p>
-              </div>
-
-              <div>
-                <p className="text-sm text-muted-foreground">Created By</p>
-                <p className="font-medium">{order.createdBy}</p>
-              </div>
+              <Field label="Received" value={fmtDate(order.receivedDate)} />
+              <Field
+                label="Expected Delivery"
+                value={fmtDate(order.expectedDeliveryDate)}
+              />
+              <Field
+                label="Repair Completed"
+                value={fmtDate(order.repairCompletedDate)}
+              />
+              <Field label="Delivered" value={fmtDate(order.deliveredDate)} />
             </CardContent>
           </Card>
 
-          {/* Financial Summary */}
+          {/* Cost summary */}
           <Card>
             <CardHeader>
-              <CardTitle>Financial Summary</CardTitle>
+              <CardTitle className="flex items-center gap-2">
+                <IndianRupee className="size-4" /> Cost Summary
+              </CardTitle>
             </CardHeader>
-            <CardContent className="space-y-3">
+            <CardContent className="space-y-2 text-sm">
               <div className="flex justify-between">
-                <span className="text-sm text-muted-foreground">Repair Revenue</span>
-                <span className="font-medium">{formatCurrency(order.financial.repairRevenue)}</span>
+                <span className="text-muted-foreground">Parts Cost</span>
+                <span>{fmtMoney(order.partsCost)}</span>
               </div>
-
               <div className="flex justify-between">
-                <span className="text-sm text-muted-foreground">Parts Cost</span>
-                <span className="font-medium">{formatCurrency(order.financial.partsCost)}</span>
+                <span className="text-muted-foreground">Labour Charges</span>
+                <span>{fmtMoney(order.labourCharges)}</span>
               </div>
-
               <div className="flex justify-between">
-                <span className="text-sm text-muted-foreground">Labour Cost</span>
-                <span className="font-medium">{formatCurrency(order.financial.labourCost)}</span>
+                <span className="text-muted-foreground">Outsourcing</span>
+                <span>{fmtMoney(order.outsourcingCost)}</span>
               </div>
-
-              <div className="flex justify-between">
-                <span className="text-sm text-muted-foreground">Outsourcing Cost</span>
-                <span className="font-medium">{formatCurrency(order.financial.outsourcingCost)}</span>
-              </div>
-
               <Separator />
-
               <div className="flex justify-between">
-                <span className="text-sm text-muted-foreground">Total Cost</span>
-                <span className="font-medium">{formatCurrency(order.financial.totalCost)}</span>
+                <span className="text-muted-foreground">Subtotal</span>
+                <span>{fmtMoney(order.subtotal)}</span>
               </div>
-
-              <div className="flex justify-between text-lg">
-                <span className="font-semibold">Profit</span>
-                <span className="font-bold text-green-600">
-                  {formatCurrency(order.financial.profit)}
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Discount</span>
+                <span>-{fmtMoney(order.discountTotal)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Taxable</span>
+                <span>{fmtMoney(order.taxableAmount)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Tax (CGST+SGST+IGST)</span>
+                <span>{fmtMoney(order.totalTax)}</span>
+              </div>
+              <Separator />
+              <div className="flex justify-between font-semibold">
+                <span>Grand Total</span>
+                <span>{fmtMoney(order.grandTotal)}</span>
+              </div>
+              <div className="flex justify-between text-xs text-muted-foreground">
+                <span>Total Cost</span>
+                <span>{fmtMoney(order.totalCost)}</span>
+              </div>
+              <div className="flex justify-between text-xs">
+                <span className="text-muted-foreground">Profit</span>
+                <span
+                  className={
+                    (order.profit ?? 0) < 0
+                      ? "text-destructive"
+                      : "text-green-600"
+                  }
+                >
+                  {fmtMoney(order.profit)}
                 </span>
               </div>
             </CardContent>
           </Card>
 
-          {/* Status Timeline */}
+          {/* Activity log */}
           <Card>
             <CardHeader>
-              <CardTitle>Status History</CardTitle>
-              <CardDescription>Timeline of status changes</CardDescription>
+              <CardTitle className="flex items-center gap-2">
+                <Activity className="size-4" /> Activity Log
+              </CardTitle>
+              <CardDescription>System audit trail</CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="space-y-4">
-                {order.statusHistory.map((history, idx) => (
-                  <div key={idx} className="relative pl-6 pb-4 last:pb-0">
-                    {idx !== order.statusHistory.length - 1 && (
-                      <div className="absolute left-2 top-6 bottom-0 w-px bg-border" />
-                    )}
-                    <div className="absolute left-0 top-1">
-                      {idx === 0 ? (
-                        <CheckCircle className="size-4 text-green-500" />
-                      ) : (
-                        <Clock className="size-4 text-muted-foreground" />
+              {activities.length === 0 ? (
+                <p className="text-sm text-muted-foreground">
+                  No activity yet.
+                </p>
+              ) : (
+                <div className="space-y-3">
+                  {activities.slice(0, 15).map((a) => (
+                    <div key={a.id} className="text-xs">
+                      <div className="flex justify-between">
+                        <span className="font-medium">
+                          {ACTION_LABELS[a.action] || a.action}
+                        </span>
+                        <span className="text-muted-foreground">
+                          {fmtDateTime(a.performedAt)}
+                        </span>
+                      </div>
+                      {(a.fromStatus || a.toStatus) && (
+                        <div className="text-muted-foreground">
+                          {fmtStatus(a.fromStatus)} → {fmtStatus(a.toStatus)}
+                        </div>
+                      )}
+                      {a.performedBy && (
+                        <div className="text-muted-foreground">
+                          by {a.performedBy}
+                        </div>
+                      )}
+                      {a.remarks && (
+                        <div className="text-muted-foreground italic">
+                          {a.remarks}
+                        </div>
                       )}
                     </div>
-                    <div>
-                      <p className="font-medium text-sm">{STATUS_LABELS[history.status]}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {formatDateTime(history.date)}
-                      </p>
-                      <p className="text-xs text-muted-foreground">By {history.updatedBy}</p>
-                      {history.notes && (
-                        <p className="text-xs mt-1">{history.notes}</p>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              )}
             </CardContent>
           </Card>
         </div>
