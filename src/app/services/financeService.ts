@@ -115,17 +115,30 @@ export interface Invoice {
     productImage?: string;
     category?: string;
     hsnSac?: string;
+    uom?: string;
     quantity: number;
     unitPrice: number;
     discount: number;
     gst: number;
     total: number;
+    // computed (read-only from backend)
+    discountAmount?: number;
+    taxableAmount?: number;
+    gstAmount?: number;
+    cgstAmount?: number;
+    sgstAmount?: number;
+    igstAmount?: number;
   }[];
   subtotal: number;
+  itemDiscountTotal?: number;
+  additionalDiscount?: number;
   totalDiscount: number;
   additionalCharges?: number;
   taxableAmount?: number;
   totalGst: number;
+  cgstTotal?: number;
+  sgstTotal?: number;
+  igstTotal?: number;
   roundOffAmount?: number;
   grandTotal: number;
   paymentAmount?: number;
@@ -137,6 +150,33 @@ export interface Invoice {
   createdAt?: string;
   updatedAt?: string;
   status: "draft" | "generated" | "partially_paid" | "paid" | "cancelled";
+
+  // ── Bill-to extras ──
+  billToPan?: string;
+  billToStateCode?: string;
+
+  // ── Shipping ──
+  sameShippingAsBilling?: boolean;
+  shipToName?: string;
+  shipToCompany?: string;
+  shipToAddress?: string;
+  shipToState?: string;
+  shipToStateCode?: string;
+
+  // ── GST compliance ──
+  placeOfSupply?: string;
+  rcmApplicable?: boolean;
+
+  // ── Bank ──
+  bankName?: string;
+  bankAccountNumber?: string;
+  bankIfsc?: string;
+  bankBranch?: string;
+  bankUpi?: string;
+
+  // ── Signatory ──
+  signatoryName?: string;
+  signatureImagePath?: string;
 }
 
 export interface CashFlowData {
@@ -516,6 +556,38 @@ export const financeService = {
     return parseJsonResponse<Invoice[]>(response);
   },
 
+  /** Phase E: server-side paged/filtered search — used by the list page. */
+  async searchInvoices(params: {
+    q?: string;
+    status?: Invoice["status"];
+    customerId?: string;
+    dateFrom?: string;
+    dateTo?: string;
+    page?: number;
+    size?: number;
+    sort?: string;
+  } = {}): Promise<{
+    content: Invoice[];
+    totalElements: number;
+    totalPages: number;
+    number: number;
+    size: number;
+    first: boolean;
+    last: boolean;
+  }> {
+    const qs = new URLSearchParams();
+    Object.entries(params).forEach(([k, v]) => {
+      if (v !== undefined && v !== null && v !== "") qs.set(k, String(v));
+    });
+    if (!qs.has("page")) qs.set("page", "0");
+    if (!qs.has("size")) qs.set("size", "20");
+    if (!qs.has("sort")) qs.set("sort", "createdAt,desc");
+    const response = await authService.authenticatedFetch(
+      `${API_BASE_URL}/invoices/search?${qs.toString()}`
+    );
+    return parseJsonResponse(response);
+  },
+
   async getInvoiceById(id: string): Promise<Invoice | null> {
     const response = await authService.authenticatedFetch(`${API_BASE_URL}/invoices/${id}`);
     if (response.status === 404) {
@@ -533,6 +605,28 @@ export const financeService = {
     return parseJsonResponse<Invoice>(response);
   },
 
+  async uploadSignature(id: string, file: File): Promise<Invoice> {
+    const form = new FormData();
+    form.append("file", file);
+    const response = await authService.authenticatedFetch(
+      `${API_BASE_URL}/invoices/${id}/signature`,
+      { method: "POST", body: form }
+    );
+    return parseJsonResponse<Invoice>(response);
+  },
+
+  async deleteSignature(id: string): Promise<Invoice> {
+    const response = await authService.authenticatedFetch(
+      `${API_BASE_URL}/invoices/${id}/signature`,
+      { method: "DELETE" }
+    );
+    return parseJsonResponse<Invoice>(response);
+  },
+
+  signatureUrl(fileName: string): string {
+    return `${API_BASE_URL}/invoices/signature/${encodeURIComponent(fileName)}`;
+  },
+
   async generateInvoicePdf(invoiceNumber: string, invoice: Omit<Invoice, "id">): Promise<{ fileName: string; downloadUrl: string }> {
     const response = await authService.authenticatedFetch(`${API_BASE_URL}/invoices/generate`, {
       method: "POST",
@@ -547,6 +641,27 @@ export const financeService = {
       method: "POST",
     });
     return parseJsonResponse<Invoice>(response);
+  },
+
+  /**
+   * Phase D: single call — server regenerates the PDF and streams it in the
+   * same response. Frontend just triggers the browser download.
+   */
+  async downloadInvoicePdfFresh(id: string, invoiceNumber: string): Promise<void> {
+    const response = await authService.authenticatedFetch(
+      `${API_BASE_URL}/invoices/${id}/pdf`
+    );
+    if (!response.ok) {
+      throw new Error(await getErrorMessage(response));
+    }
+    const blob = await response.blob();
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = `${invoiceNumber}.pdf`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(link.href);
   },
 
   async downloadInvoicePdf(fileName: string): Promise<void> {
@@ -597,6 +712,8 @@ function normalizeInvoicePayload<T extends Partial<Invoice> | Omit<Invoice, "id"
     ...invoice,
     items: invoice.items?.map((item) => ({
       ...item,
+      // ensure uom always sent so backend column doesn't NULL out on edit
+      uom: item.uom ?? "nos",
       quantity: clampNumber(item.quantity, 1),
       unitPrice: clampNumber(item.unitPrice, 0),
       discount: clampNumber(item.discount, 0, 100),

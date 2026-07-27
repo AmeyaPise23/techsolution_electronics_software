@@ -13,7 +13,9 @@ import {
   SelectValue,
 } from "../components/ui/select";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../components/ui/card";
-import { Plus, X, ArrowLeft } from "lucide-react";
+import { Checkbox } from "../components/ui/checkbox";
+import { RadioGroup, RadioGroupItem } from "../components/ui/radio-group";
+import { Plus, X, ArrowLeft, Truck, Percent, Landmark, Upload } from "lucide-react";
 import { toast } from "sonner";
 
 interface InvoiceItem {
@@ -23,8 +25,51 @@ interface InvoiceItem {
   unitPrice: number;
   discount: number;
   gst: number;
+  uom: string;
   total: number;
 }
+
+// Indian states with GST state codes.
+const INDIAN_STATES: { code: string; name: string }[] = [
+  { code: "01", name: "Jammu & Kashmir" },
+  { code: "02", name: "Himachal Pradesh" },
+  { code: "03", name: "Punjab" },
+  { code: "04", name: "Chandigarh" },
+  { code: "05", name: "Uttarakhand" },
+  { code: "06", name: "Haryana" },
+  { code: "07", name: "Delhi" },
+  { code: "08", name: "Rajasthan" },
+  { code: "09", name: "Uttar Pradesh" },
+  { code: "10", name: "Bihar" },
+  { code: "11", name: "Sikkim" },
+  { code: "12", name: "Arunachal Pradesh" },
+  { code: "13", name: "Nagaland" },
+  { code: "14", name: "Manipur" },
+  { code: "15", name: "Mizoram" },
+  { code: "16", name: "Tripura" },
+  { code: "17", name: "Meghalaya" },
+  { code: "18", name: "Assam" },
+  { code: "19", name: "West Bengal" },
+  { code: "20", name: "Jharkhand" },
+  { code: "21", name: "Odisha" },
+  { code: "22", name: "Chhattisgarh" },
+  { code: "23", name: "Madhya Pradesh" },
+  { code: "24", name: "Gujarat" },
+  { code: "27", name: "Maharashtra" },
+  { code: "29", name: "Karnataka" },
+  { code: "30", name: "Goa" },
+  { code: "32", name: "Kerala" },
+  { code: "33", name: "Tamil Nadu" },
+  { code: "34", name: "Puducherry" },
+  { code: "36", name: "Telangana" },
+  { code: "37", name: "Andhra Pradesh" },
+];
+
+const UOM_OPTIONS: string[] = [
+  "nos", "pcs", "kg", "gm", "ltr", "ml",
+  "mtr", "cm", "hrs", "days", "months", "years",
+  "box", "pack", "set", "unit",
+];
 
 const DEFAULT_TERMS = `1. Warranty - 3 Months from Date of Invoice
 2. Payment - 45 Days from the date of Invoice
@@ -71,6 +116,7 @@ export function FinanceInvoiceCreate() {
       unitPrice: 0,
       discount: 0,
       gst: 18,
+      uom: "nos",
       total: 0,
     },
   ]);
@@ -89,6 +135,57 @@ export function FinanceInvoiceCreate() {
 
   const [autoRoundOff, setAutoRoundOff] = useState(true);
   const [paymentAmount, setPaymentAmount] = useState(0);
+
+  // ── Shipping (GST) ──
+  const [shipping, setShipping] = useState({
+    sameAsBilling: true,
+    address: "",
+    state: "",
+    stateCode: "",
+  });
+
+  // ── Tax & GST Compliance ──
+  const [tax, setTax] = useState({
+    placeOfSupply: "",
+    rcmApplicable: false,
+    customerPan: "",
+  });
+
+  // ── Payment / Bank Details ──
+  const [payment, setPayment] = useState({
+    bankName: "",
+    accountNumber: "",
+    ifscCode: "",
+    branch: "",
+    upiId: "",
+  });
+
+  // ── Signatory ──
+  const [signatory, setSignatory] = useState({
+    name: "",
+  });
+  const [signatureFile, setSignatureFile] = useState<File | null>(null);
+  const [signaturePreview, setSignaturePreview] = useState<string>("");
+
+  // Keep shipping in sync with billing when "same as billing" is checked.
+  useEffect(() => {
+    if (!shipping.sameAsBilling) return;
+    setShipping((prev) => ({
+      ...prev,
+      address: customer.address,
+      state: prev.state, // state / stateCode aren't on the billing customer today
+      stateCode: prev.stateCode,
+    }));
+  }, [customer.address, shipping.sameAsBilling]);
+
+  // Release the signature preview object URL on unmount.
+  useEffect(() => {
+    return () => {
+      if (signaturePreview) URL.revokeObjectURL(signaturePreview);
+    };
+    // Only on unmount — the click handler already revokes on replace.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // ── Edit-mode loader ──
   useEffect(() => {
@@ -112,14 +209,11 @@ export function FinanceInvoiceCreate() {
           address: inv.customer?.address ?? "",
           gstNumber: inv.customer?.gstNumber ?? "",
         });
-        const prefix = inv.invoicePrefix ?? "";
-        const numberOnly =
-          prefix && inv.invoiceNumber?.startsWith(prefix)
-            ? inv.invoiceNumber.slice(prefix.length)
-            : inv.invoiceNumber ?? "";
+        // Prefix and number are stored independently on the backend now — no
+        // string-slicing acrobatics.
         setInvoiceInfo({
-          invoicePrefix: prefix || "TS/26-27/",
-          invoiceNumber: numberOnly,
+          invoicePrefix: inv.invoicePrefix ?? "TS/26-27/",
+          invoiceNumber: inv.invoiceNumber ?? "",
           invoiceDate: inv.invoiceDate ?? new Date().toISOString().split("T")[0],
           paymentTermsDays: inv.paymentTermsDays ?? 30,
           dueDate: inv.dueDate ?? new Date().toISOString().split("T")[0],
@@ -137,6 +231,7 @@ export function FinanceInvoiceCreate() {
                 unitPrice: it.unitPrice ?? 0,
                 discount: it.discount ?? 0,
                 gst: it.gst ?? 0,
+                uom: (it as { uom?: string }).uom ?? "nos",
                 total: it.total ?? 0,
               }))
             : [
@@ -185,6 +280,7 @@ export function FinanceInvoiceCreate() {
         unitPrice: 0,
         discount: 0,
         gst: 18,
+        uom: "nos",
         total: 0,
       },
     ]);
@@ -300,9 +396,17 @@ export function FinanceInvoiceCreate() {
       }
 
       const invoice = {
+        // Store prefix and number separately end-to-end (Phase E fix — no more
+        // string-concat + string-split round trip that broke edit-mode when a
+        // prefix was ever changed).
         invoicePrefix: invoiceInfo.invoicePrefix,
-        invoiceNumber: `${invoiceInfo.invoicePrefix}${invoiceInfo.invoiceNumber}`,
-        customer,
+        invoiceNumber: invoiceInfo.invoiceNumber,
+        customer: {
+          ...customer,
+          pan: tax.customerPan,
+          state: shipping.state,
+          stateCode: shipping.stateCode,
+        },
         invoiceDate: invoiceInfo.invoiceDate,
         dueDate: invoiceInfo.dueDate,
         paymentTermsDays: invoiceInfo.paymentTermsDays,
@@ -310,6 +414,27 @@ export function FinanceInvoiceCreate() {
         poDate: invoiceInfo.poDate,
         ewayBillNo: invoiceInfo.ewayBillNo,
         vehicleNo: invoiceInfo.vehicleNo,
+        // Shipping (GST)
+        shipping: {
+          sameAsBilling: shipping.sameAsBilling,
+          address: shipping.sameAsBilling ? customer.address : shipping.address,
+          state: shipping.state,
+          stateCode: shipping.stateCode,
+        },
+        // Tax & GST
+        placeOfSupply: tax.placeOfSupply,
+        rcmApplicable: tax.rcmApplicable,
+        // Bank / payment
+        bankName: payment.bankName,
+        bankAccountNumber: payment.accountNumber,
+        bankIfsc: payment.ifscCode,
+        bankBranch: payment.branch,
+        bankUpi: payment.upiId,
+        // Signatory
+        signatoryName: signatory.name,
+        // Signature file is a File instance — backend needs multipart to persist
+        // it. Sending flag so the backend can request the upload separately.
+        hasSignatureUpload: !!signatureFile,
         items,
         notes,
         termsAndConditions,
@@ -321,21 +446,36 @@ export function FinanceInvoiceCreate() {
         grandTotal: totals.grandTotal,
         paymentAmount,
         status,
-      } as Omit<Invoice, "id">;
+      } as unknown as Omit<Invoice, "id">;
 
-      if (isEditing && editingId) {
-        await financeService.updateInvoice(editingId, invoice);
-        toast.success(
-          `Invoice ${status === "draft" ? "saved as draft" : "updated"} successfully`
-        );
-        navigate(`/admin/finance/invoices/${editingId}`);
-      } else {
-        await financeService.createInvoice(invoice);
-        toast.success(
-          `Invoice ${status === "draft" ? "saved as draft" : "created"} successfully`
-        );
-        navigate("/admin/finance/invoices");
+      // Save invoice first — we need its id to attach a signature image.
+      const saved = isEditing && editingId
+        ? await financeService.updateInvoice(editingId, invoice)
+        : await financeService.createInvoice(invoice);
+
+      // Upload signature image if the user selected one (Phase E).
+      if (signatureFile && saved.id) {
+        try {
+          await financeService.uploadSignature(String(saved.id), signatureFile);
+        } catch (e) {
+          toast.error(
+            e instanceof Error
+              ? `Invoice saved but signature upload failed: ${e.message}`
+              : "Invoice saved but signature upload failed"
+          );
+        }
       }
+
+      toast.success(
+        `Invoice ${
+          status === "draft" ? "saved as draft" : isEditing ? "updated" : "created"
+        } successfully`
+      );
+      navigate(
+        isEditing && editingId
+          ? `/admin/finance/invoices/${editingId}`
+          : "/admin/finance/invoices"
+      );
     } catch (error) {
       console.error("Error creating invoice:", error);
       toast.error(error instanceof Error ? error.message : "Failed to create invoice");
@@ -468,6 +608,174 @@ export function FinanceInvoiceCreate() {
                     setCustomer({ ...customer, gstNumber: e.target.value })
                   }
                 />
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Shipping Details */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Truck className="size-4" />
+                Shipping Details
+              </CardTitle>
+              <CardDescription>
+                Where the goods/services will be delivered
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex items-center gap-2">
+                <Checkbox
+                  id="sameAsBilling"
+                  checked={shipping.sameAsBilling}
+                  onCheckedChange={(v) => {
+                    const checked = v === true;
+                    setShipping((prev) => ({
+                      ...prev,
+                      sameAsBilling: checked,
+                      address: checked ? customer.address : prev.address,
+                    }));
+                  }}
+                />
+                <Label htmlFor="sameAsBilling" className="cursor-pointer">
+                  Same as billing address
+                </Label>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="shippingAddress">Shipping Address</Label>
+                <Textarea
+                  id="shippingAddress"
+                  value={
+                    shipping.sameAsBilling ? customer.address : shipping.address
+                  }
+                  onChange={(e) =>
+                    setShipping({ ...shipping, address: e.target.value })
+                  }
+                  disabled={shipping.sameAsBilling}
+                  rows={3}
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="shipState">Customer State</Label>
+                  <Select
+                    value={shipping.state}
+                    onValueChange={(v) => {
+                      const s = INDIAN_STATES.find((x) => x.name === v);
+                      setShipping({
+                        ...shipping,
+                        state: v,
+                        stateCode: s?.code ?? shipping.stateCode,
+                      });
+                    }}
+                  >
+                    <SelectTrigger id="shipState">
+                      <SelectValue placeholder="Select state" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {INDIAN_STATES.map((s) => (
+                        <SelectItem key={s.code} value={s.name}>
+                          {s.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="shipStateCode">State Code</Label>
+                  <Input
+                    id="shipStateCode"
+                    value={shipping.stateCode}
+                    onChange={(e) =>
+                      setShipping({ ...shipping, stateCode: e.target.value })
+                    }
+                    placeholder="e.g., 27"
+                    maxLength={2}
+                  />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Tax & GST Compliance */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Percent className="size-4" />
+                Tax & GST Compliance
+              </CardTitle>
+              <CardDescription>
+                Place of supply, RCM and customer PAN
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="placeOfSupply">Place of Supply *</Label>
+                  <Select
+                    value={tax.placeOfSupply}
+                    onValueChange={(v) =>
+                      setTax({ ...tax, placeOfSupply: v })
+                    }
+                  >
+                    <SelectTrigger id="placeOfSupply">
+                      <SelectValue placeholder="Select state" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {INDIAN_STATES.map((s) => (
+                        <SelectItem key={s.code} value={s.name}>
+                          {s.code} — {s.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="customerPan">Customer PAN</Label>
+                  <Input
+                    id="customerPan"
+                    value={tax.customerPan}
+                    onChange={(e) =>
+                      setTax({
+                        ...tax,
+                        customerPan: e.target.value.toUpperCase(),
+                      })
+                    }
+                    placeholder="AAACE1234F"
+                    maxLength={10}
+                    className="uppercase"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Reverse Charge Mechanism (RCM)</Label>
+                <RadioGroup
+                  value={tax.rcmApplicable ? "yes" : "no"}
+                  onValueChange={(v) =>
+                    setTax({ ...tax, rcmApplicable: v === "yes" })
+                  }
+                  className="flex gap-6"
+                >
+                  <div className="flex items-center gap-2">
+                    <RadioGroupItem value="no" id="rcm-no" />
+                    <Label htmlFor="rcm-no" className="cursor-pointer">
+                      No
+                    </Label>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <RadioGroupItem value="yes" id="rcm-yes" />
+                    <Label htmlFor="rcm-yes" className="cursor-pointer">
+                      Yes
+                    </Label>
+                  </div>
+                </RadioGroup>
+                <p className="text-xs text-muted-foreground">
+                  Enable if the recipient is liable to pay tax under reverse
+                  charge.
+                </p>
               </div>
             </CardContent>
           </Card>
@@ -645,7 +953,25 @@ export function FinanceInvoiceCreate() {
                         }
                       />
                     </div>
-                    <div className="col-span-2 space-y-2">
+                    <div className="col-span-1 space-y-2">
+                      <Label className="text-xs">UoM</Label>
+                      <Select
+                        value={item.uom}
+                        onValueChange={(v) => updateItem(index, "uom", v)}
+                      >
+                        <SelectTrigger className="h-9">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {UOM_OPTIONS.map((u) => (
+                            <SelectItem key={u} value={u}>
+                              {u}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="col-span-1 space-y-2">
                       <Label className="text-xs">Unit Price</Label>
                       <Input
                         type="number"
@@ -771,6 +1097,157 @@ export function FinanceInvoiceCreate() {
                   + Add Terms and Conditions
                 </button>
               )}
+            </CardContent>
+          </Card>
+
+          {/* Payment & Signatory Details */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Landmark className="size-4" />
+                Payment & Signatory Details
+              </CardTitle>
+              <CardDescription>
+                Bank remittance info and authorised signatory shown on the
+                invoice
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              {/* Bank */}
+              <div>
+                <h4 className="text-sm font-medium mb-3">Bank Details</h4>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="bankName">Bank Name</Label>
+                    <Input
+                      id="bankName"
+                      value={payment.bankName}
+                      onChange={(e) =>
+                        setPayment({ ...payment, bankName: e.target.value })
+                      }
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="accountNumber">Account Number</Label>
+                    <Input
+                      id="accountNumber"
+                      value={payment.accountNumber}
+                      onChange={(e) =>
+                        setPayment({
+                          ...payment,
+                          accountNumber: e.target.value,
+                        })
+                      }
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="ifsc">IFSC Code</Label>
+                    <Input
+                      id="ifsc"
+                      value={payment.ifscCode}
+                      onChange={(e) =>
+                        setPayment({
+                          ...payment,
+                          ifscCode: e.target.value.toUpperCase(),
+                        })
+                      }
+                      className="uppercase"
+                      maxLength={11}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="branch">Branch</Label>
+                    <Input
+                      id="branch"
+                      value={payment.branch}
+                      onChange={(e) =>
+                        setPayment({ ...payment, branch: e.target.value })
+                      }
+                    />
+                  </div>
+                  <div className="space-y-2 col-span-2">
+                    <Label htmlFor="upi">UPI ID</Label>
+                    <Input
+                      id="upi"
+                      value={payment.upiId}
+                      onChange={(e) =>
+                        setPayment({ ...payment, upiId: e.target.value })
+                      }
+                      placeholder="name@bank"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Signatory */}
+              <div>
+                <h4 className="text-sm font-medium mb-3">Authorised Signatory</h4>
+                <div className="grid grid-cols-2 gap-4 items-start">
+                  <div className="space-y-2">
+                    <Label htmlFor="sigName">Signatory Name</Label>
+                    <Input
+                      id="sigName"
+                      value={signatory.name}
+                      onChange={(e) =>
+                        setSignatory({ ...signatory, name: e.target.value })
+                      }
+                      placeholder="e.g., Rajesh Sharma"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="sigImage">Signature Image</Label>
+                    <div className="flex items-center gap-3">
+                      <Label
+                        htmlFor="sigImage"
+                        className="inline-flex items-center gap-2 px-3 py-2 border rounded-md cursor-pointer hover:bg-muted/40 text-sm"
+                      >
+                        <Upload className="size-4" />
+                        {signatureFile ? "Change" : "Upload"}
+                      </Label>
+                      <input
+                        id="sigImage"
+                        type="file"
+                        accept="image/png,image/jpeg,image/svg+xml"
+                        className="sr-only"
+                        onChange={(e) => {
+                          const f = e.target.files?.[0] ?? null;
+                          setSignatureFile(f);
+                          if (signaturePreview) {
+                            URL.revokeObjectURL(signaturePreview);
+                          }
+                          setSignaturePreview(
+                            f ? URL.createObjectURL(f) : ""
+                          );
+                        }}
+                      />
+                      {signaturePreview && (
+                        <div className="flex items-center gap-2">
+                          <img
+                            src={signaturePreview}
+                            alt="Signature preview"
+                            className="h-10 border rounded bg-white"
+                          />
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => {
+                              URL.revokeObjectURL(signaturePreview);
+                              setSignatureFile(null);
+                              setSignaturePreview("");
+                            }}
+                          >
+                            <X className="size-4" />
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      PNG / JPG / SVG, transparent background recommended.
+                    </p>
+                  </div>
+                </div>
+              </div>
             </CardContent>
           </Card>
 

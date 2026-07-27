@@ -7,77 +7,94 @@ import { Card } from "../components/ui/card";
 import { Badge } from "../components/ui/badge";
 import { toast } from "sonner";
 
+const STATE_NAMES: Record<string, string> = {
+  "01": "Jammu & Kashmir", "02": "Himachal Pradesh", "03": "Punjab",
+  "04": "Chandigarh", "05": "Uttarakhand", "06": "Haryana", "07": "Delhi",
+  "08": "Rajasthan", "09": "Uttar Pradesh", "10": "Bihar", "19": "West Bengal",
+  "21": "Odisha", "23": "Madhya Pradesh", "24": "Gujarat", "27": "Maharashtra",
+  "29": "Karnataka", "30": "Goa", "32": "Kerala", "33": "Tamil Nadu",
+  "36": "Telangana", "37": "Andhra Pradesh",
+};
+
+const money = (v?: number) =>
+  new Intl.NumberFormat("en-IN", {
+    style: "currency",
+    currency: "INR",
+    maximumFractionDigits: 2,
+  }).format(v ?? 0);
+
+const fmtDate = (d?: string) =>
+  d ? new Date(d).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }) : "-";
+
+function statusBadge(status: string) {
+  const map: Record<string, { label: string; cls: string }> = {
+    draft: { label: "Draft", cls: "" },
+    generated: { label: "Generated", cls: "bg-blue-500 hover:bg-blue-500 text-white" },
+    partially_paid: { label: "Partially Paid", cls: "bg-amber-500 hover:bg-amber-500 text-white" },
+    paid: { label: "Paid", cls: "bg-emerald-600 hover:bg-emerald-600 text-white" },
+    cancelled: { label: "Cancelled", cls: "bg-destructive text-white" },
+  };
+  const entry = map[status] ?? { label: status, cls: "" };
+  return entry.cls ? (
+    <Badge className={entry.cls}>{entry.label}</Badge>
+  ) : (
+    <Badge variant="outline">{entry.label}</Badge>
+  );
+}
+
+function stateLabel(code?: string) {
+  if (!code) return "";
+  const name = STATE_NAMES[code];
+  return name ? `${name} (Code: ${code})` : `Code: ${code}`;
+}
+
 export function FinanceInvoiceView() {
   const { id } = useParams();
   const navigate = useNavigate();
   const [invoice, setInvoice] = useState<Invoice | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [downloading, setDownloading] = useState(false);
 
   useEffect(() => {
-    if (id) {
-      loadInvoice(id);
-    }
+    if (!id) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        setLoading(true);
+        setLoadError(null);
+        const data = await financeService.getInvoiceById(id);
+        if (cancelled) return;
+        if (!data) {
+          setLoadError(`Invoice #${id} not found`);
+        } else {
+          setInvoice(data);
+        }
+      } catch (e) {
+        if (!cancelled) {
+          setLoadError(e instanceof Error ? e.message : "Failed to load invoice");
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, [id]);
 
-  const loadInvoice = async (invoiceId: string) => {
-    try {
-      setLoading(true);
-      const data = await financeService.getInvoiceById(invoiceId);
-      setInvoice(data);
-    } catch (error) {
-      console.error("Failed to load invoice:", error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handlePrint = () => {
-    window.print();
-  };
+  const handlePrint = () => window.print();
 
   const handleDownloadPDF = async () => {
     if (!invoice) return;
-    
+    setDownloading(true);
     try {
-      toast.loading("Generating PDF...");
-      
-      const updatedInvoice = await financeService.generateExistingInvoicePdf(invoice.id);
-      const fileName = updatedInvoice.pdfPath || updatedInvoice.downloadUrl?.split("/").pop();
-      if (!fileName) {
-        throw new Error("PDF file name was not returned by the server");
-      }
-      
-      await financeService.downloadInvoicePdf(fileName);
-      toast.dismiss();
-      toast.success("Invoice downloaded successfully");
-    } catch (error) {
-      console.error("Failed to download invoice:", error);
-      toast.dismiss();
-      toast.error("Failed to download invoice");
-    }
-  };
-
-  const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat("en-IN", {
-      style: "currency",
-      currency: "INR",
-    }).format(value);
-  };
-
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case "paid":
-        return <Badge variant="default">Paid</Badge>;
-      case "generated":
-        return <Badge variant="secondary">Generated</Badge>;
-      case "partially_paid":
-        return <Badge variant="secondary">Partially Paid</Badge>;
-      case "draft":
-        return <Badge variant="outline">Draft</Badge>;
-      case "cancelled":
-        return <Badge variant="outline">Cancelled</Badge>;
-      default:
-        return <Badge>{status}</Badge>;
+      await financeService.downloadInvoicePdfFresh(invoice.id, invoice.invoiceNumber);
+      toast.success("Invoice downloaded");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to download invoice");
+    } finally {
+      setDownloading(false);
     }
   };
 
@@ -85,24 +102,41 @@ export function FinanceInvoiceView() {
     return (
       <div className="p-6">
         <div className="animate-pulse space-y-4">
-          <div className="h-8 bg-muted rounded w-64"></div>
-          <div className="h-96 bg-muted rounded"></div>
+          <div className="h-8 bg-muted rounded w-64" />
+          <div className="h-96 bg-muted rounded" />
         </div>
       </div>
     );
   }
 
-  if (!invoice) {
+  if (loadError || !invoice) {
     return (
-      <div className="p-6">
-        <p className="text-muted-foreground">Invoice not found</p>
+      <div className="p-6 space-y-4">
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => navigate("/admin/finance/invoices")}
+        >
+          <ArrowLeft className="size-4 mr-2" /> Back to invoices
+        </Button>
+        <div className="rounded-md border border-destructive/30 bg-destructive/5 p-4 text-sm">
+          <div className="font-medium">Could not load invoice</div>
+          <div className="text-muted-foreground mt-1">
+            {loadError ?? "Invoice not found."}
+          </div>
+        </div>
       </div>
     );
   }
 
+  const sameShipping =
+    invoice.sameShippingAsBilling === undefined || invoice.sameShippingAsBilling === true;
+
+  const canEdit = invoice.status !== "paid" && invoice.status !== "cancelled";
+
   return (
     <div className="p-6 space-y-6">
-      {/* Header - No Print */}
+      {/* Header (hidden on print) */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 print:hidden">
         <div className="flex items-center gap-4">
           <Button
@@ -113,151 +147,407 @@ export function FinanceInvoiceView() {
             <ArrowLeft className="size-5" />
           </Button>
           <div>
-            <h1 className="mb-1">Invoice {invoice.invoiceNumber}</h1>
-            <p className="text-muted-foreground">View and print invoice details</p>
+            <div className="flex items-center gap-3 mb-1 flex-wrap">
+              <h1 className="m-0">{invoice.invoiceNumber}</h1>
+              {statusBadge(invoice.status)}
+            </div>
+            <p className="text-muted-foreground">
+              Issued {fmtDate(invoice.invoiceDate)} · Due {fmtDate(invoice.dueDate)}
+            </p>
           </div>
         </div>
-
         <div className="flex gap-2">
-          {invoice.status !== "paid" && invoice.status !== "cancelled" && (
+          {canEdit && (
             <Button
               variant="outline"
-              onClick={() =>
-                navigate(`/admin/finance/invoices/${invoice.id}/edit`)
-              }
+              onClick={() => navigate(`/admin/finance/invoices/${invoice.id}/edit`)}
             >
-              <Pencil className="size-4 mr-2" />
-              Edit
+              <Pencil className="size-4 mr-2" /> Edit
             </Button>
           )}
           <Button variant="outline" onClick={handlePrint}>
-            <Printer className="size-4 mr-2" />
-            Print
+            <Printer className="size-4 mr-2" /> Print
           </Button>
-          <Button onClick={handleDownloadPDF}>
+          <Button onClick={handleDownloadPDF} disabled={downloading}>
             <Download className="size-4 mr-2" />
-            Download PDF
+            {downloading ? "Downloading…" : "Download PDF"}
           </Button>
         </div>
       </div>
 
-      {/* Invoice Card */}
-      <Card className="max-w-4xl mx-auto p-8 print:shadow-none print:border-0">
-        {/* Header */}
-        <div className="flex justify-between items-start mb-8">
+      {/* Invoice document (styled like the PDF) */}
+      <Card className="max-w-5xl mx-auto p-8 print:shadow-none print:border-0 print:p-0">
+        {/* Top header: seller (left) + TAX INVOICE + meta (right) */}
+        <div className="flex flex-col sm:flex-row justify-between gap-8 mb-6 pb-6 border-b">
           <div>
-            <h2 className="text-3xl font-bold mb-2">INVOICE</h2>
-            <p className="text-sm text-muted-foreground">
-              Invoice #{invoice.invoiceNumber}
+            <h2 className="text-2xl font-bold text-blue-700 mb-2 m-0">
+              Techsolution
+            </h2>
+            <p className="text-sm">Hinjewadi Phase 1, Pune</p>
+            <p className="text-sm">Maharashtra - 411057</p>
+            <p className="text-sm">
+              <span className="font-medium">GSTIN:</span> 27AAACE1234F1Z5{" "}
+              <span className="text-muted-foreground">|</span>{" "}
+              <span className="font-medium">PAN:</span> AAACE1234F
+            </p>
+            <p className="text-sm">
+              <span className="font-medium">State:</span> Maharashtra (Code: 27)
+            </p>
+            <p className="text-sm">
+              <span className="font-medium">Email:</span> billing@techsolution.com{" "}
+              <span className="text-muted-foreground">|</span>{" "}
+              <span className="font-medium">Phone:</span> +91-9876543210
             </p>
           </div>
           <div className="text-right">
-            <p className="font-semibold text-lg">Your Company Name</p>
-            <p className="text-sm text-muted-foreground">123 Business Street</p>
-            <p className="text-sm text-muted-foreground">City, State 12345</p>
-            <p className="text-sm text-muted-foreground">Tax ID: 123-456-789</p>
-          </div>
-        </div>
-
-        {/* Customer & Invoice Details */}
-        <div className="grid grid-cols-2 gap-8 mb-8">
-          <div>
-            <p className="text-sm font-semibold mb-2">Bill To:</p>
-            <p className="font-medium">{invoice.customer.name}</p>
-            <p className="text-sm text-muted-foreground">{invoice.customer.company}</p>
-            <p className="text-sm text-muted-foreground mt-2">
-              {invoice.customer.address}
-            </p>
-            <p className="text-sm text-muted-foreground">{invoice.customer.email}</p>
-            <p className="text-sm text-muted-foreground">{invoice.customer.phone}</p>
-            {invoice.customer.gstNumber && (
-              <p className="text-sm text-muted-foreground mt-2">
-                GST: {invoice.customer.gstNumber}
-              </p>
-            )}
-          </div>
-
-          <div className="text-right">
-            <div className="mb-4 print:hidden">{getStatusBadge(invoice.status)}</div>
-            <div className="space-y-1">
-              <p className="text-sm">
-                <span className="font-medium">Invoice Date:</span>{" "}
-                {new Date(invoice.invoiceDate).toLocaleDateString()}
-              </p>
-              <p className="text-sm">
-                <span className="font-medium">Due Date:</span>{" "}
-                {new Date(invoice.dueDate).toLocaleDateString()}
-              </p>
+            <h1 className="text-3xl font-bold mb-3 m-0">TAX INVOICE</h1>
+            <div className="grid grid-cols-2 gap-x-4 text-sm">
+              <div className="font-medium text-left sm:text-right">Invoice No:</div>
+              <div className="text-right">{invoice.invoiceNumber}</div>
+              <div className="font-medium text-left sm:text-right">Date:</div>
+              <div className="text-right">{fmtDate(invoice.invoiceDate)}</div>
+              <div className="font-medium text-left sm:text-right">Due Date:</div>
+              <div className="text-right">{fmtDate(invoice.dueDate)}</div>
+              {invoice.placeOfSupply && (
+                <>
+                  <div className="font-medium text-left sm:text-right">
+                    Place of Supply:
+                  </div>
+                  <div className="text-right">{invoice.placeOfSupply}</div>
+                </>
+              )}
+              {invoice.rcmApplicable && (
+                <>
+                  <div className="font-medium text-left sm:text-right">RCM:</div>
+                  <div className="text-right">Applicable</div>
+                </>
+              )}
             </div>
           </div>
         </div>
 
-        {/* Items Table */}
-        <div className="mb-8">
-          <table className="w-full">
-            <thead>
-              <tr className="border-b-2 border-border">
-                <th className="text-left py-3 text-sm font-semibold">Product</th>
-                <th className="text-center py-3 text-sm font-semibold">Qty</th>
-                <th className="text-right py-3 text-sm font-semibold">Price</th>
-                <th className="text-right py-3 text-sm font-semibold">Discount</th>
-                <th className="text-right py-3 text-sm font-semibold">GST</th>
-                <th className="text-right py-3 text-sm font-semibold">Total</th>
-              </tr>
-            </thead>
-            <tbody>
-              {invoice.items.map((item, index) => (
-                <tr key={index} className="border-b border-border">
-                  <td className="py-3 text-sm">{item.productName}</td>
-                  <td className="py-3 text-sm text-center">{item.quantity}</td>
-                  <td className="py-3 text-sm text-right">
-                    {formatCurrency(item.unitPrice)}
-                  </td>
-                  <td className="py-3 text-sm text-right">{item.discount}%</td>
-                  <td className="py-3 text-sm text-right">{item.gst}%</td>
-                  <td className="py-3 text-sm text-right font-medium">
-                    {formatCurrency(item.total)}
-                  </td>
+        {/* PARTIES */}
+        <section className="mb-6">
+          <h3 className="text-sm font-semibold text-blue-700 mb-2 uppercase tracking-wide">
+            Parties
+          </h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div className="border rounded-md p-4">
+              <p className="text-xs font-semibold text-muted-foreground mb-1">
+                BILL TO
+              </p>
+              <p className="font-semibold">
+                {invoice.customer.company || invoice.customer.name}
+              </p>
+              {invoice.customer.company && invoice.customer.name && (
+                <p className="text-sm">{invoice.customer.name}</p>
+              )}
+              <p className="text-sm text-muted-foreground whitespace-pre-line">
+                {invoice.customer.address}
+              </p>
+              {invoice.billToStateCode && (
+                <p className="text-sm mt-1">
+                  <span className="font-medium">State:</span>{" "}
+                  {stateLabel(invoice.billToStateCode)}
+                </p>
+              )}
+              {invoice.customer.gstNumber && (
+                <p className="text-sm">
+                  <span className="font-medium">GSTIN:</span>{" "}
+                  {invoice.customer.gstNumber}
+                </p>
+              )}
+              {invoice.billToPan && (
+                <p className="text-sm">
+                  <span className="font-medium">PAN:</span> {invoice.billToPan}
+                </p>
+              )}
+              {invoice.customer.email && (
+                <p className="text-sm text-muted-foreground">
+                  {invoice.customer.email}
+                </p>
+              )}
+            </div>
+            <div className="border rounded-md p-4">
+              <p className="text-xs font-semibold text-muted-foreground mb-1">
+                SHIP TO
+              </p>
+              {sameShipping ? (
+                <>
+                  <p className="font-semibold">
+                    {invoice.customer.company || invoice.customer.name}
+                  </p>
+                  <p className="text-sm text-muted-foreground whitespace-pre-line">
+                    {invoice.customer.address}
+                  </p>
+                  <p className="text-sm italic text-muted-foreground mt-2">
+                    (Same as billing)
+                  </p>
+                </>
+              ) : (
+                <>
+                  <p className="font-semibold">
+                    {invoice.shipToCompany || invoice.shipToName || "-"}
+                  </p>
+                  {invoice.shipToCompany && invoice.shipToName && (
+                    <p className="text-sm">{invoice.shipToName}</p>
+                  )}
+                  <p className="text-sm text-muted-foreground whitespace-pre-line">
+                    {invoice.shipToAddress}
+                  </p>
+                  {invoice.shipToStateCode && (
+                    <p className="text-sm mt-1">
+                      <span className="font-medium">State:</span>{" "}
+                      {stateLabel(invoice.shipToStateCode)}
+                    </p>
+                  )}
+                </>
+              )}
+            </div>
+          </div>
+        </section>
+
+        {/* ITEMS */}
+        <section className="mb-6">
+          <h3 className="text-sm font-semibold text-blue-700 mb-2 uppercase tracking-wide">
+            Items & Charges
+          </h3>
+          <div className="overflow-x-auto border rounded-md">
+            <table className="w-full text-sm">
+              <thead className="bg-blue-700 text-white">
+                <tr>
+                  <th className="px-2 py-2 text-left">#</th>
+                  <th className="px-2 py-2 text-left">Description</th>
+                  <th className="px-2 py-2 text-center">HSN/SAC</th>
+                  <th className="px-2 py-2 text-center">Qty</th>
+                  <th className="px-2 py-2 text-center">UoM</th>
+                  <th className="px-2 py-2 text-right">Rate (₹)</th>
+                  <th className="px-2 py-2 text-right">Taxable (₹)</th>
+                  <th className="px-2 py-2 text-right">CGST</th>
+                  <th className="px-2 py-2 text-right">SGST</th>
+                  <th className="px-2 py-2 text-right">IGST</th>
+                  <th className="px-2 py-2 text-right">Total (₹)</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {invoice.items.map((it, i) => (
+                  <tr key={i} className="border-t">
+                    <td className="px-2 py-2 align-top">{i + 1}</td>
+                    <td className="px-2 py-2 align-top">{it.productName}</td>
+                    <td className="px-2 py-2 text-center align-top">
+                      {it.hsnSac || "-"}
+                    </td>
+                    <td className="px-2 py-2 text-center align-top">
+                      {it.quantity}
+                    </td>
+                    <td className="px-2 py-2 text-center align-top text-muted-foreground">
+                      {it.uom ?? "-"}
+                    </td>
+                    <td className="px-2 py-2 text-right align-top">
+                      {money(it.unitPrice)}
+                    </td>
+                    <td className="px-2 py-2 text-right align-top">
+                      {money(it.taxableAmount)}
+                    </td>
+                    <td className="px-2 py-2 text-right align-top">
+                      {money(it.cgstAmount)}
+                    </td>
+                    <td className="px-2 py-2 text-right align-top">
+                      {money(it.sgstAmount)}
+                    </td>
+                    <td className="px-2 py-2 text-right align-top">
+                      {money(it.igstAmount)}
+                    </td>
+                    <td className="px-2 py-2 text-right font-medium align-top">
+                      {money(it.total)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
 
-        {/* Totals */}
-        <div className="flex justify-end mb-8">
-          <div className="w-64 space-y-2">
-            <div className="flex justify-between text-sm">
-              <span className="text-muted-foreground">Subtotal:</span>
-              <span className="font-medium">{formatCurrency(invoice.subtotal)}</span>
+        {/* Payment + Summary */}
+        <section className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+          <div>
+            <h3 className="text-sm font-semibold text-blue-700 mb-2 uppercase tracking-wide">
+              Payment Details
+            </h3>
+            <div className="border rounded-md p-4 space-y-1 text-sm">
+              <div>
+                <span className="font-medium">Bank Name:</span>{" "}
+                {invoice.bankName || "HDFC Bank"}
+              </div>
+              <div>
+                <span className="font-medium">Account Name:</span> Techsolution
+              </div>
+              <div>
+                <span className="font-medium">Account Number:</span>{" "}
+                {invoice.bankAccountNumber || "50200012345678"}
+              </div>
+              <div>
+                <span className="font-medium">IFSC Code:</span>{" "}
+                {invoice.bankIfsc || "HDFC0001234"}
+              </div>
+              <div>
+                <span className="font-medium">Branch:</span>{" "}
+                {invoice.bankBranch || "Hinjewadi, Pune"}
+              </div>
+              <div>
+                <span className="font-medium">UPI ID:</span>{" "}
+                {invoice.bankUpi || "techsolution@hdfcbank"}
+              </div>
             </div>
-            <div className="flex justify-between text-sm">
-              <span className="text-muted-foreground">Discount:</span>
-              <span className="font-medium text-red-600">
-                -{formatCurrency(invoice.totalDiscount)}
-              </span>
-            </div>
-            <div className="flex justify-between text-sm">
-              <span className="text-muted-foreground">GST:</span>
-              <span className="font-medium">{formatCurrency(invoice.totalGst)}</span>
-            </div>
-            <div className="flex justify-between text-lg font-bold pt-2 border-t-2 border-border">
-              <span>Total:</span>
-              <span>{formatCurrency(invoice.grandTotal)}</span>
+
+            {invoice.termsAndConditions && (
+              <>
+                <h3 className="text-sm font-semibold text-blue-700 mt-4 mb-2 uppercase tracking-wide">
+                  Terms & Conditions
+                </h3>
+                <ul className="text-xs space-y-1 list-disc pl-5">
+                  {invoice.termsAndConditions
+                    .split(/\r?\n/)
+                    .filter((l) => l.trim())
+                    .map((l, i) => (
+                      <li key={i}>{l.trim()}</li>
+                    ))}
+                </ul>
+              </>
+            )}
+
+            {/* Signatory (matches the PDF footer layout) */}
+            <div className="mt-8">
+              <p className="text-sm">
+                For <span className="font-semibold">Techsolution</span>
+              </p>
+              <div className="border-t border-gray-400 mt-8 w-56" />
+              <p className="text-sm font-semibold mt-1">
+                {invoice.signatoryName || "Authorized Signatory"}
+              </p>
+              {invoice.signatoryName && (
+                <p className="text-xs text-muted-foreground">
+                  Authorized Signatory
+                </p>
+              )}
             </div>
           </div>
-        </div>
 
-        {/* Footer */}
-        <div className="pt-8 border-t border-border">
-          <p className="text-sm text-muted-foreground mb-2">
-            <span className="font-medium">Payment Terms:</span> Payment due within 30
-            days
-          </p>
-          <p className="text-sm text-muted-foreground">
-            <span className="font-medium">Note:</span> Thank you for your business!
-          </p>
-        </div>
+          <div>
+            <h3 className="text-sm font-semibold text-blue-700 mb-2 uppercase tracking-wide">
+              Summary
+            </h3>
+            <div className="border rounded-md">
+              <div className="grid grid-cols-2 text-sm">
+                <div className="p-3 border-b">Subtotal</div>
+                <div className="p-3 border-b text-right">{money(invoice.subtotal)}</div>
+
+                <div className="p-3 border-b">Discount</div>
+                <div className="p-3 border-b text-right text-red-600">
+                  ({money(invoice.totalDiscount)})
+                </div>
+
+                <div className="p-3 border-b font-semibold">Taxable Amount</div>
+                <div className="p-3 border-b text-right font-semibold">
+                  {money(invoice.taxableAmount)}
+                </div>
+
+                <div className="p-3 border-b">CGST Total</div>
+                <div className="p-3 border-b text-right">
+                  {money(invoice.cgstTotal)}
+                </div>
+
+                <div className="p-3 border-b">SGST Total</div>
+                <div className="p-3 border-b text-right">
+                  {money(invoice.sgstTotal)}
+                </div>
+
+                <div className="p-3 border-b">IGST Total</div>
+                <div className="p-3 border-b text-right">
+                  {money(invoice.igstTotal)}
+                </div>
+
+                {(invoice.additionalCharges ?? 0) > 0 && (
+                  <>
+                    <div className="p-3 border-b">Additional Charges</div>
+                    <div className="p-3 border-b text-right">
+                      {money(invoice.additionalCharges)}
+                    </div>
+                  </>
+                )}
+
+                {(invoice.roundOffAmount ?? 0) !== 0 && (
+                  <>
+                    <div className="p-3 border-b">Round Off</div>
+                    <div className="p-3 border-b text-right">
+                      {money(invoice.roundOffAmount)}
+                    </div>
+                  </>
+                )}
+
+                <div className="p-3 bg-blue-50 text-blue-700 font-bold text-base">
+                  GRAND TOTAL
+                </div>
+                <div className="p-3 bg-blue-50 text-blue-700 font-bold text-base text-right">
+                  {money(invoice.grandTotal)}
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-4 space-y-1 text-sm">
+              <div>
+                <span className="font-medium">Amount in Words:</span>
+              </div>
+              <div className="italic text-muted-foreground">
+                {/* Simple client-side words are omitted; the PDF renders the
+                  authoritative version. Just show currency here. */}
+                {money(invoice.grandTotal)}
+              </div>
+            </div>
+
+            <div className="mt-4 border rounded-md">
+              <div className="grid grid-cols-2 text-sm">
+                <div className="p-3 bg-blue-50 border-b font-medium">
+                  Amount Paid:
+                </div>
+                <div className="p-3 bg-blue-50 border-b text-right">
+                  {money(invoice.paymentAmount)}
+                </div>
+                <div
+                  className={`p-3 font-semibold ${
+                    (invoice.balanceDue ?? 0) > 0
+                      ? "bg-red-50 text-red-700"
+                      : "bg-blue-50"
+                  }`}
+                >
+                  Balance Due:
+                </div>
+                <div
+                  className={`p-3 text-right font-semibold ${
+                    (invoice.balanceDue ?? 0) > 0
+                      ? "bg-red-50 text-red-700"
+                      : "bg-blue-50"
+                  }`}
+                >
+                  {money(invoice.balanceDue)}
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {invoice.notes && (
+          <section className="mb-4">
+            <p className="text-sm">
+              <span className="font-semibold">Notes:</span> {invoice.notes}
+            </p>
+          </section>
+        )}
+
+        <p className="text-xs text-muted-foreground italic text-center pt-4 border-t">
+          This is a computer-generated invoice and does not require a physical
+          signature.
+        </p>
       </Card>
     </div>
   );

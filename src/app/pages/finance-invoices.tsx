@@ -1,6 +1,6 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { financeService, Invoice } from "../services/financeService";
-import { Plus, Search, Eye, Download, Printer, Pencil, Trash2 } from "lucide-react";
+import { Plus, Search, Eye, Download, Pencil, Trash2 } from "lucide-react";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import {
@@ -23,101 +23,101 @@ import { Card } from "../components/ui/card";
 import { toast } from "sonner";
 import { useNavigate } from "react-router";
 
+const PAGE_SIZE = 20;
+
+function statusBadge(status: string) {
+  const map: Record<string, { label: string; cls: string; variant?: "default" | "outline" | "secondary" | "destructive" }> = {
+    draft: { label: "Draft", cls: "", variant: "outline" },
+    generated: { label: "Generated", cls: "bg-blue-500 hover:bg-blue-500 text-white" },
+    partially_paid: { label: "Partially Paid", cls: "bg-amber-500 hover:bg-amber-500 text-white" },
+    paid: { label: "Paid", cls: "bg-emerald-600 hover:bg-emerald-600 text-white" },
+    cancelled: { label: "Cancelled", cls: "", variant: "outline" },
+  };
+  const entry = map[status] ?? { label: status, cls: "" };
+  return entry.cls ? (
+    <Badge className={entry.cls}>{entry.label}</Badge>
+  ) : (
+    <Badge variant={entry.variant ?? "outline"}>{entry.label}</Badge>
+  );
+}
+
+const money = (v?: number) =>
+  new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR" }).format(v ?? 0);
+
+const fmtDate = (d?: string) =>
+  d ? new Date(d).toLocaleDateString("en-IN") : "-";
+
 export function FinanceInvoices() {
   const navigate = useNavigate();
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [loading, setLoading] = useState(true);
+  const [totalElements, setTotalElements] = useState(0);
+  const [totalPages, setTotalPages] = useState(0);
+  const [page, setPage] = useState(0);
+
   const [searchQuery, setSearchQuery] = useState("");
-  const [statusFilter, setStatusFilter] = useState("all");
+  const [statusFilter, setStatusFilter] = useState<string>("all");
 
-  useEffect(() => {
-    loadInvoices();
-  }, []);
-
-  const loadInvoices = async () => {
+  const load = useCallback(async () => {
+    setLoading(true);
     try {
-      setLoading(true);
-      const data = await financeService.getInvoices();
-      setInvoices(data);
-    } catch (error) {
-      toast.error("Failed to load invoices");
+      const result = await financeService.searchInvoices({
+        q: searchQuery.trim() || undefined,
+        status:
+          statusFilter !== "all"
+            ? (statusFilter as Invoice["status"])
+            : undefined,
+        page,
+        size: PAGE_SIZE,
+      });
+      setInvoices(result.content);
+      setTotalElements(result.totalElements);
+      setTotalPages(result.totalPages);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to load invoices");
     } finally {
       setLoading(false);
     }
-  };
+  }, [searchQuery, statusFilter, page]);
 
-  const handleDelete = async (id: string) => {
-    if (confirm("Are you sure you want to delete this invoice?")) {
-      try {
-        await financeService.deleteInvoice(id);
-        setInvoices(invoices.filter((inv) => inv.id !== id));
-        toast.success("Invoice deleted successfully");
-      } catch (error) {
-        toast.error("Failed to delete invoice");
-      }
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  // Debounce search input; reset to page 0 when filters change.
+  useEffect(() => {
+    const t = setTimeout(() => setPage(0), 300);
+    return () => clearTimeout(t);
+  }, [searchQuery, statusFilter]);
+
+  const handleDelete = async (id: string, invoiceNumber: string) => {
+    if (!confirm(`Delete invoice ${invoiceNumber}? Paid/partially-paid invoices must be cancelled instead.`)) return;
+    try {
+      await financeService.deleteInvoice(id);
+      toast.success(`Invoice ${invoiceNumber} deleted`);
+      load();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to delete invoice");
     }
   };
 
   const handleDownloadPDF = async (invoice: Invoice) => {
     try {
-      toast.loading("Generating PDF...");
-      
-      const updatedInvoice = await financeService.generateExistingInvoicePdf(invoice.id);
-      const fileName = updatedInvoice.pdfPath || updatedInvoice.downloadUrl?.split("/").pop();
-      if (!fileName) {
-        throw new Error("PDF file name was not returned by the server");
-      }
-      
-      await financeService.downloadInvoicePdf(fileName);
-      toast.dismiss();
-      toast.success("Invoice downloaded successfully");
-    } catch (error) {
-      console.error("Failed to download invoice:", error);
-      toast.dismiss();
-      toast.error("Failed to download invoice");
+      await financeService.downloadInvoicePdfFresh(invoice.id, invoice.invoiceNumber);
+      toast.success(`Downloaded ${invoice.invoiceNumber}.pdf`);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to download invoice");
     }
   };
 
-  const filteredInvoices = invoices.filter((invoice) => {
-    const matchesSearch =
-      invoice.invoiceNumber.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      invoice.customer.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      invoice.customer.company.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesStatus = statusFilter === "all" || invoice.status === statusFilter;
-    return matchesSearch && matchesStatus;
-  });
-
-  const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat("en-IN", {
-      style: "currency",
-      currency: "INR",
-    }).format(value);
-  };
-
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case "paid":
-        return <Badge variant="default">Paid</Badge>;
-      case "generated":
-        return <Badge variant="secondary">Generated</Badge>;
-      case "partially_paid":
-        return <Badge variant="secondary">Partially Paid</Badge>;
-      case "draft":
-        return <Badge variant="outline">Draft</Badge>;
-      case "cancelled":
-        return <Badge variant="outline">Cancelled</Badge>;
-      default:
-        return <Badge>{status}</Badge>;
-    }
-  };
-
-  const totalAmount = invoices.reduce((sum, inv) => sum + inv.grandTotal, 0);
-  const paidAmount = invoices
-    .filter((inv) => inv.status === "paid")
-    .reduce((sum, inv) => sum + inv.grandTotal, 0);
-  const pendingAmount = invoices
-    .filter((inv) => inv.status === "generated" || inv.status === "partially_paid")
-    .reduce((sum, inv) => sum + inv.grandTotal, 0);
+  // Stats limited to the visible page.
+  const pageTotal = invoices.reduce((s, i) => s + (i.grandTotal ?? 0), 0);
+  const pagePaid = invoices
+    .filter((i) => i.status === "paid")
+    .reduce((s, i) => s + (i.grandTotal ?? 0), 0);
+  const pageOutstanding = invoices
+    .filter((i) => i.status === "generated" || i.status === "partially_paid")
+    .reduce((s, i) => s + ((i.balanceDue ?? i.grandTotal) ?? 0), 0);
 
   return (
     <div className="p-6 space-y-6">
@@ -125,7 +125,9 @@ export function FinanceInvoices() {
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <h1 className="mb-1">Invoices</h1>
-          <p className="text-muted-foreground">Manage and track all invoices</p>
+          <p className="text-muted-foreground">
+            {totalElements} total{totalElements === 1 ? " invoice" : " invoices"}
+          </p>
         </div>
         <Button onClick={() => navigate("/admin/finance/invoices/create")}>
           <Plus className="size-4 mr-2" />
@@ -133,26 +135,24 @@ export function FinanceInvoices() {
         </Button>
       </div>
 
-      {/* Stats */}
+      {/* Stats (current page) */}
       <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
         <Card className="p-6">
-          <p className="text-sm text-muted-foreground mb-1">Total Invoices</p>
+          <p className="text-sm text-muted-foreground mb-1">On this page</p>
           <p className="text-2xl font-bold">{invoices.length}</p>
         </Card>
         <Card className="p-6">
-          <p className="text-sm text-muted-foreground mb-1">Total Amount</p>
-          <p className="text-2xl font-bold">{formatCurrency(totalAmount)}</p>
+          <p className="text-sm text-muted-foreground mb-1">Page value</p>
+          <p className="text-2xl font-bold">{money(pageTotal)}</p>
         </Card>
         <Card className="p-6">
-          <p className="text-sm text-muted-foreground mb-1">Paid</p>
-          <p className="text-2xl font-bold text-green-600">
-            {formatCurrency(paidAmount)}
-          </p>
+          <p className="text-sm text-muted-foreground mb-1">Paid (page)</p>
+          <p className="text-2xl font-bold text-green-600">{money(pagePaid)}</p>
         </Card>
         <Card className="p-6">
-          <p className="text-sm text-muted-foreground mb-1">Outstanding</p>
+          <p className="text-sm text-muted-foreground mb-1">Outstanding (page)</p>
           <p className="text-2xl font-bold text-orange-600">
-            {formatCurrency(pendingAmount)}
+            {money(pageOutstanding)}
           </p>
         </Card>
       </div>
@@ -162,7 +162,7 @@ export function FinanceInvoices() {
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
           <Input
-            placeholder="Search invoices..."
+            placeholder="Search by number, customer, PO, e-way bill, email, phone…"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="pl-9"
@@ -193,8 +193,8 @@ export function FinanceInvoices() {
                 <TableHead>Customer</TableHead>
                 <TableHead>Date</TableHead>
                 <TableHead>Due Date</TableHead>
-                <TableHead>Amount</TableHead>
-                <TableHead>GST</TableHead>
+                <TableHead className="text-right">Grand Total</TableHead>
+                <TableHead className="text-right">Balance Due</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
@@ -203,15 +203,17 @@ export function FinanceInvoices() {
               {loading ? (
                 <TableRow>
                   <TableCell colSpan={8} className="text-center py-8">
-                    Loading invoices...
+                    Loading invoices…
                   </TableCell>
                 </TableRow>
-              ) : filteredInvoices.length === 0 ? (
+              ) : invoices.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={8} className="text-center py-8">
                     <div className="flex flex-col items-center gap-2">
-                      <p className="text-muted-foreground">No invoices found</p>
-                      {invoices.length === 0 && (
+                      <p className="text-muted-foreground">
+                        {totalElements === 0 ? "No invoices yet" : "No invoices match your filter"}
+                      </p>
+                      {totalElements === 0 && (
                         <Button
                           variant="outline"
                           onClick={() => navigate("/admin/finance/invoices/create")}
@@ -224,34 +226,40 @@ export function FinanceInvoices() {
                   </TableCell>
                 </TableRow>
               ) : (
-                filteredInvoices.map((invoice) => (
+                invoices.map((invoice) => (
                   <TableRow key={invoice.id}>
                     <TableCell className="font-medium">
                       {invoice.invoiceNumber}
                     </TableCell>
                     <TableCell>
                       <div>
-                        <p className="font-medium">{invoice.customer.name}</p>
-                        <p className="text-sm text-muted-foreground">
-                          {invoice.customer.company}
+                        <p className="font-medium">
+                          {invoice.customer?.company || invoice.customer?.name}
                         </p>
+                        {invoice.customer?.company && invoice.customer?.name && (
+                          <p className="text-sm text-muted-foreground">
+                            {invoice.customer.name}
+                          </p>
+                        )}
                       </div>
                     </TableCell>
-                    <TableCell>
-                      {new Date(invoice.invoiceDate).toLocaleDateString()}
+                    <TableCell>{fmtDate(invoice.invoiceDate)}</TableCell>
+                    <TableCell>{fmtDate(invoice.dueDate)}</TableCell>
+                    <TableCell className="text-right font-medium">
+                      {money(invoice.grandTotal)}
                     </TableCell>
-                    <TableCell>
-                      {new Date(invoice.dueDate).toLocaleDateString()}
+                    <TableCell
+                      className={`text-right ${
+                        (invoice.balanceDue ?? 0) > 0
+                          ? "text-orange-600"
+                          : "text-muted-foreground"
+                      }`}
+                    >
+                      {money(invoice.balanceDue)}
                     </TableCell>
-                    <TableCell className="font-medium">
-                      {formatCurrency(invoice.grandTotal)}
-                    </TableCell>
-                    <TableCell className="text-muted-foreground">
-                      {formatCurrency(invoice.totalGst)}
-                    </TableCell>
-                    <TableCell>{getStatusBadge(invoice.status)}</TableCell>
+                    <TableCell>{statusBadge(invoice.status)}</TableCell>
                     <TableCell className="text-right">
-                      <div className="flex items-center justify-end gap-2">
+                      <div className="flex items-center justify-end gap-1">
                         <Button
                           variant="ghost"
                           size="icon"
@@ -261,13 +269,6 @@ export function FinanceInvoices() {
                           title="View"
                         >
                           <Eye className="size-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          title="Print"
-                        >
-                          <Printer className="size-4" />
                         </Button>
                         <Button
                           variant="ghost"
@@ -294,7 +295,9 @@ export function FinanceInvoices() {
                         <Button
                           variant="ghost"
                           size="icon"
-                          onClick={() => handleDelete(invoice.id)}
+                          onClick={() =>
+                            handleDelete(invoice.id, invoice.invoiceNumber)
+                          }
                           title="Delete"
                         >
                           <Trash2 className="size-4 text-destructive" />
@@ -307,6 +310,33 @@ export function FinanceInvoices() {
             </TableBody>
           </Table>
         </div>
+
+        {/* Pagination */}
+        {totalPages > 1 && (
+          <div className="flex items-center justify-between p-4 border-t">
+            <p className="text-sm text-muted-foreground">
+              Page {page + 1} of {totalPages}
+            </p>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={page === 0}
+                onClick={() => setPage((p) => Math.max(0, p - 1))}
+              >
+                Previous
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={page >= totalPages - 1}
+                onClick={() => setPage((p) => p + 1)}
+              >
+                Next
+              </Button>
+            </div>
+          </div>
+        )}
       </Card>
     </div>
   );
