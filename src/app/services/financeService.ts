@@ -88,6 +88,71 @@ export interface Vendor {
   paymentStatus: "pending" | "paid" | "overdue";
 }
 
+export interface InvoiceDashboardData {
+  dateFrom: string;
+  dateTo: string;
+  summary: {
+    totalInvoiced: number;
+    collected: number;
+    outstanding: number;
+    overdue: number;
+    invoiceCount: number;
+    overdueCount: number;
+    totalInvoicedChangePercent: number;
+    collectedChangePercent: number;
+    outstandingChangePercent: number;
+  };
+  trend: {
+    month: string;
+    monthStart: string;
+    totalInvoiced: number;
+    invoiceCount: number;
+  }[];
+  aging: {
+    totalOutstanding: number;
+    buckets: {
+      label: string;
+      fromDays: number;
+      toDays?: number;
+      amount: number;
+      invoiceCount: number;
+      percentage: number;
+    }[];
+  };
+}
+
+export interface InvoiceReminderResponse {
+  invoiceId: string;
+  invoiceNumber: string;
+  customerName: string;
+  recipientEmail?: string;
+  channel: string;
+  balanceDue: number;
+  dueDate: string;
+  overdue: boolean;
+  status: "ready" | "missing_recipient" | string;
+  message: string;
+  createdAt: string;
+}
+
+export interface InvoiceCompanyInfo {
+  name: string;
+  addressLine1: string;
+  addressLine2: string;
+  gstin: string;
+  pan: string;
+  stateName: string;
+  stateCode: string;
+  email: string;
+  phone: string;
+  bankName: string;
+  bankAccountName: string;
+  bankAccountNumber: string;
+  bankIfsc: string;
+  bankBranch: string;
+  bankUpi: string;
+}
+
 export interface Invoice {
   id: string;
   invoicePrefix?: string;
@@ -588,12 +653,33 @@ export const financeService = {
     return parseJsonResponse(response);
   },
 
+  async getInvoiceDashboard(params: {
+    dateFrom?: string;
+    dateTo?: string;
+    trendMonths?: number;
+  } = {}): Promise<InvoiceDashboardData> {
+    const qs = new URLSearchParams();
+    Object.entries(params).forEach(([key, value]) => {
+      if (value !== undefined && value !== null && value !== "") qs.set(key, String(value));
+    });
+    const suffix = qs.toString() ? `?${qs.toString()}` : "";
+    const response = await authService.authenticatedFetch(
+      `${API_BASE_URL}/invoices/dashboard${suffix}`
+    );
+    return parseJsonResponse<InvoiceDashboardData>(response);
+  },
+
   async getInvoiceById(id: string): Promise<Invoice | null> {
     const response = await authService.authenticatedFetch(`${API_BASE_URL}/invoices/${id}`);
     if (response.status === 404) {
       return null;
     }
     return parseJsonResponse<Invoice>(response);
+  },
+
+  async getInvoiceCompanyInfo(): Promise<InvoiceCompanyInfo> {
+    const response = await authService.authenticatedFetch(`${API_BASE_URL}/invoices/company-info`);
+    return parseJsonResponse<InvoiceCompanyInfo>(response);
   },
 
   async createInvoice(invoice: Omit<Invoice, "id">): Promise<Invoice> {
@@ -688,6 +774,38 @@ export const financeService = {
       body: JSON.stringify(normalizeInvoicePayload(invoice)),
     });
     return parseJsonResponse<Invoice>(response);
+  },
+
+  async receiveInvoicePayment(id: string, amount: number, notes?: string): Promise<Invoice> {
+    const response = await authService.authenticatedFetch(`${API_BASE_URL}/invoices/${id}/payments`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        amount,
+        paymentDate: new Date().toISOString().slice(0, 10),
+        notes,
+      }),
+    });
+    return parseJsonResponse<Invoice>(response);
+  },
+
+  async sendInvoiceReminder(id: string, message?: string): Promise<InvoiceReminderResponse> {
+    const response = await authService.authenticatedFetch(`${API_BASE_URL}/invoices/${id}/reminders`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ channel: "email", message }),
+    });
+    return parseJsonResponse<InvoiceReminderResponse>(response);
+  },
+
+  async shareInvoice(id: string, body: { recipientEmail: string; recipientName?: string; note?: string }): Promise<{ channel: string; recipientEmail: string; documentNumber: string; status: string; sharedAt: string }> {
+    const response = await authService.authenticatedFetch(`${API_BASE_URL}/invoices/${id}/share`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    const result = await parseJsonResponse<{ success: boolean; message: string; data: { channel: string; recipientEmail: string; documentNumber: string; status: string; sharedAt: string } }>(response);
+    return result.data;
   },
 
   async deleteInvoice(id: string): Promise<void> {

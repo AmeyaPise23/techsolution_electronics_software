@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router";
-import { financeService, Invoice } from "../services/financeService";
+import { financeService, Invoice, InvoiceCompanyInfo } from "../services/financeService";
 import { Button } from "../components/ui/button";
 import { ArrowLeft, Download, Pencil, Printer } from "lucide-react";
 import { Card } from "../components/ui/card";
@@ -52,6 +52,7 @@ export function FinanceInvoiceView() {
   const { id } = useParams();
   const navigate = useNavigate();
   const [invoice, setInvoice] = useState<Invoice | null>(null);
+  const [companyInfo, setCompanyInfo] = useState<InvoiceCompanyInfo | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [downloading, setDownloading] = useState(false);
@@ -63,12 +64,16 @@ export function FinanceInvoiceView() {
       try {
         setLoading(true);
         setLoadError(null);
-        const data = await financeService.getInvoiceById(id);
+        const [data, company] = await Promise.all([
+          financeService.getInvoiceById(id),
+          financeService.getInvoiceCompanyInfo(),
+        ]);
         if (cancelled) return;
         if (!data) {
           setLoadError(`Invoice #${id} not found`);
         } else {
           setInvoice(data);
+          setCompanyInfo(company);
         }
       } catch (e) {
         if (!cancelled) {
@@ -181,22 +186,22 @@ export function FinanceInvoiceView() {
         <div className="flex flex-col sm:flex-row justify-between gap-8 mb-6 pb-6 border-b">
           <div>
             <h2 className="text-2xl font-bold text-blue-700 mb-2 m-0">
-              Techsolution
+              {companyInfo?.name ?? "Techsolution"}
             </h2>
-            <p className="text-sm">Hinjewadi Phase 1, Pune</p>
-            <p className="text-sm">Maharashtra - 411057</p>
+            <p className="text-sm">{companyInfo?.addressLine1 ?? "Hinjewadi Phase 1, Pune"}</p>
+            <p className="text-sm">{companyInfo?.addressLine2 ?? "Maharashtra - 411057"}</p>
             <p className="text-sm">
-              <span className="font-medium">GSTIN:</span> 27AAACE1234F1Z5{" "}
+              <span className="font-medium">GSTIN:</span> {companyInfo?.gstin ?? "27AAACE1234F1Z5"}{" "}
               <span className="text-muted-foreground">|</span>{" "}
-              <span className="font-medium">PAN:</span> AAACE1234F
+              <span className="font-medium">PAN:</span> {companyInfo?.pan ?? "AAACE1234F"}
             </p>
             <p className="text-sm">
-              <span className="font-medium">State:</span> Maharashtra (Code: 27)
+              <span className="font-medium">State:</span> {companyInfo?.stateName ?? "Maharashtra"} (Code: {companyInfo?.stateCode ?? "27"})
             </p>
             <p className="text-sm">
-              <span className="font-medium">Email:</span> billing@techsolution.com{" "}
+              <span className="font-medium">Email:</span> {companyInfo?.email ?? "billing@techsolution.com"}{" "}
               <span className="text-muted-foreground">|</span>{" "}
-              <span className="font-medium">Phone:</span> +91-9876543210
+              <span className="font-medium">Phone:</span> {companyInfo?.phone ?? "+91-9876543210"}
             </p>
           </div>
           <div className="text-right">
@@ -377,26 +382,26 @@ export function FinanceInvoiceView() {
             <div className="border rounded-md p-4 space-y-1 text-sm">
               <div>
                 <span className="font-medium">Bank Name:</span>{" "}
-                {invoice.bankName || "HDFC Bank"}
+                {invoice.bankName || companyInfo?.bankName || "HDFC Bank"}
               </div>
               <div>
-                <span className="font-medium">Account Name:</span> Techsolution
+                <span className="font-medium">Account Name:</span> {companyInfo?.bankAccountName ?? "Techsolution"}
               </div>
               <div>
                 <span className="font-medium">Account Number:</span>{" "}
-                {invoice.bankAccountNumber || "50200012345678"}
+                {invoice.bankAccountNumber || companyInfo?.bankAccountNumber || "50200012345678"}
               </div>
               <div>
                 <span className="font-medium">IFSC Code:</span>{" "}
-                {invoice.bankIfsc || "HDFC0001234"}
+                {invoice.bankIfsc || companyInfo?.bankIfsc || "HDFC0001234"}
               </div>
               <div>
                 <span className="font-medium">Branch:</span>{" "}
-                {invoice.bankBranch || "Hinjewadi, Pune"}
+                {invoice.bankBranch || companyInfo?.bankBranch || "Hinjewadi, Pune"}
               </div>
               <div>
                 <span className="font-medium">UPI ID:</span>{" "}
-                {invoice.bankUpi || "techsolution@hdfcbank"}
+                {invoice.bankUpi || companyInfo?.bankUpi || "techsolution@hdfcbank"}
               </div>
             </div>
 
@@ -419,7 +424,7 @@ export function FinanceInvoiceView() {
             {/* Signatory (matches the PDF footer layout) */}
             <div className="mt-8">
               <p className="text-sm">
-                For <span className="font-semibold">Techsolution</span>
+                For <span className="font-semibold">{companyInfo?.name ?? "Techsolution"}</span>
               </p>
               <div className="border-t border-gray-400 mt-8 w-56" />
               <p className="text-sm font-semibold mt-1">
