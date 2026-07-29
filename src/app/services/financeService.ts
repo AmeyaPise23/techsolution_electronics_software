@@ -239,8 +239,7 @@ export interface Invoice {
   bankBranch?: string;
   bankUpi?: string;
 
-  // ── Signatory ──
-  signatoryName?: string;
+  // ── Seal & signature ──
   signatureImagePath?: string;
 }
 
@@ -711,6 +710,16 @@ export const financeService = {
 
   signatureUrl(fileName: string): string {
     return `${API_BASE_URL}/invoices/signature/${encodeURIComponent(fileName)}`;
+  },
+
+  /** Fetch the seal & signature image with auth and return an object URL
+   *  usable in an <img> tag. Caller must revoke it when done. */
+  async fetchSignatureObjectUrl(fileName: string): Promise<string> {
+    const response = await authService.authenticatedFetch(
+      this.signatureUrl(fileName)
+    );
+    if (!response.ok) throw new Error("Failed to load signature image");
+    return URL.createObjectURL(await response.blob());
   },
 
   async generateInvoicePdf(invoiceNumber: string, invoice: Omit<Invoice, "id">): Promise<{ fileName: string; downloadUrl: string }> {

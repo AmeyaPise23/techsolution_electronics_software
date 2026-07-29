@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router";
 import { financeService, Invoice } from "../services/financeService";
 import { Button } from "../components/ui/button";
@@ -15,7 +15,7 @@ import {
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../components/ui/card";
 import { Checkbox } from "../components/ui/checkbox";
 import { RadioGroup, RadioGroupItem } from "../components/ui/radio-group";
-import { Plus, X, ArrowLeft, Truck, Percent, Landmark, Upload } from "lucide-react";
+import { Plus, X, ArrowLeft, Truck, Percent, Landmark, Stamp, Upload } from "lucide-react";
 import { toast } from "sonner";
 
 interface InvoiceItem {
@@ -78,6 +78,120 @@ const DEFAULT_TERMS = `1. Warranty - 3 Months from Date of Invoice
 5. Transport charges - Nil
 6. Warranty has been voided in case of burn,broken or fault occur high electricity
 7. Subject to Jurisdiction of the Courts at Pune Only`;
+
+/**
+ * Seal & Signature upload widget.
+ *
+ * The file <input> is positioned as a transparent overlay directly on top of
+ * the click surface (drop-zone or Replace button) rather than being hidden
+ * elsewhere in the tree. This matters:
+ *   • Chrome scrolls the focused input into view when the user activates the
+ *     picker. A hidden `sr-only` input lives at position (0,0) of its offset
+ *     parent, so the scroll container ends up jumping past all content —
+ *     the user sees the page blank/scrolled-to-nothing. Overlay = no jump.
+ *   • Some Linux + Chromium builds don't repaint the surface behind the
+ *     native file dialog cleanly. We snapshot the scroll position on click
+ *     and restore it when focus returns, so even if the dialog quirk fires
+ *     the user lands back where they were.
+ */
+function SealSignatureUpload({
+  sealPreview,
+  existingSealPath,
+  onFileChosen,
+  onRemove,
+}: {
+  sealPreview: string;
+  existingSealPath: string;
+  onFileChosen: (file: File) => void;
+  onRemove: () => void;
+}) {
+  const scrollSnapshotRef = useRef<{ el: Element; top: number } | null>(null);
+
+  const handlePickerOpen = () => {
+    const main = document.querySelector("main");
+    if (main) {
+      scrollSnapshotRef.current = { el: main, top: main.scrollTop };
+    }
+    const restore = () => {
+      const snap = scrollSnapshotRef.current;
+      if (snap) (snap.el as HTMLElement).scrollTop = snap.top;
+      window.removeEventListener("focus", restore);
+    };
+    window.addEventListener("focus", restore);
+  };
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0] ?? null;
+    e.target.value = ""; // allow re-selecting the same file later
+    if (!f) return;
+    if (f.size > 2 * 1024 * 1024) {
+      toast.error("Seal & signature image must be under 2MB");
+      return;
+    }
+    onFileChosen(f);
+  };
+
+  const overlayInput = (extraClass = "") => (
+    <input
+      type="file"
+      accept="image/png,image/jpeg"
+      className={`absolute inset-0 h-full w-full opacity-0 cursor-pointer ${extraClass}`}
+      onClick={handlePickerOpen}
+      onChange={handleChange}
+      aria-label="Seal and signature image"
+    />
+  );
+
+  if (sealPreview || existingSealPath) {
+    return (
+      <div className="flex items-center gap-5">
+        <div className="border rounded-lg bg-white p-3 shadow-sm">
+          {sealPreview ? (
+            <img
+              src={sealPreview}
+              alt="Seal & signature preview"
+              className="h-20 max-w-56 object-contain"
+            />
+          ) : (
+            <div className="h-20 w-40 flex items-center justify-center text-xs text-muted-foreground">
+              Loading…
+            </div>
+          )}
+        </div>
+        <div className="flex flex-col gap-2">
+          <div className="relative inline-flex items-center gap-2 px-3 py-2 border rounded-md hover:bg-muted/40 text-sm font-normal cursor-pointer">
+            <Upload className="size-4" />
+            Replace
+            {overlayInput()}
+          </div>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="text-destructive justify-start"
+            onClick={onRemove}
+          >
+            <X className="size-4 mr-1" />
+            Remove
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="relative flex flex-col items-center justify-center gap-2 border-2 border-dashed rounded-lg p-8 hover:border-primary/50 hover:bg-muted/30 transition-colors text-center cursor-pointer">
+      <Stamp className="size-8 text-muted-foreground pointer-events-none" />
+      <span className="text-sm font-medium pointer-events-none">
+        Upload signature &amp; stamp image
+      </span>
+      <span className="text-xs text-muted-foreground font-normal pointer-events-none">
+        PNG or JPG, up to 2MB — a transparent background looks best on the invoice
+      </span>
+      {overlayInput()}
+    </div>
+  );
+}
 
 export function FinanceInvoiceCreate() {
   const navigate = useNavigate();
@@ -160,12 +274,34 @@ export function FinanceInvoiceCreate() {
     upiId: "",
   });
 
-  // ── Signatory ──
-  const [signatory, setSignatory] = useState({
-    name: "",
-  });
-  const [signatureFile, setSignatureFile] = useState<File | null>(null);
-  const [signaturePreview, setSignaturePreview] = useState<string>("");
+  // ── Seal & signature (stamp image printed below Terms & Conditions) ──
+  const [sealFile, setSealFile] = useState<File | null>(null);
+  const [sealPreview, setSealPreview] = useState<string>("");
+  const [existingSealPath, setExistingSealPath] = useState<string>("");
+  const [removeSeal, setRemoveSeal] = useState(false);
+
+  // Load the stored seal image for preview when editing.
+  useEffect(() => {
+    if (!existingSealPath) return;
+    let cancelled = false;
+    let url = "";
+    (async () => {
+      try {
+        url = await financeService.fetchSignatureObjectUrl(existingSealPath);
+        if (cancelled) {
+          URL.revokeObjectURL(url);
+          return;
+        }
+        setSealPreview(url);
+      } catch {
+        // Missing image is not fatal — the upload zone is shown instead.
+      }
+    })();
+    return () => {
+      cancelled = true;
+      if (url) URL.revokeObjectURL(url);
+    };
+  }, [existingSealPath]);
 
   // Keep shipping in sync with billing when "same as billing" is checked.
   useEffect(() => {
@@ -177,15 +313,6 @@ export function FinanceInvoiceCreate() {
       stateCode: prev.stateCode,
     }));
   }, [customer.address, shipping.sameAsBilling]);
-
-  // Release the signature preview object URL on unmount.
-  useEffect(() => {
-    return () => {
-      if (signaturePreview) URL.revokeObjectURL(signaturePreview);
-    };
-    // Only on unmount — the click handler already revokes on replace.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   // ── Edit-mode loader ──
   useEffect(() => {
@@ -249,6 +376,7 @@ export function FinanceInvoiceCreate() {
         setNotes(inv.notes ?? "");
         setShowNotes(!!inv.notes);
         setTermsAndConditions(inv.termsAndConditions ?? DEFAULT_TERMS);
+        setExistingSealPath(inv.signatureImagePath ?? "");
         if ((inv.additionalCharges ?? 0) > 0) {
           setShowAdditionalCharges(true);
           setAdditionalCharges(inv.additionalCharges ?? 0);
@@ -430,11 +558,6 @@ export function FinanceInvoiceCreate() {
         bankIfsc: payment.ifscCode,
         bankBranch: payment.branch,
         bankUpi: payment.upiId,
-        // Signatory
-        signatoryName: signatory.name,
-        // Signature file is a File instance — backend needs multipart to persist
-        // it. Sending flag so the backend can request the upload separately.
-        hasSignatureUpload: !!signatureFile,
         items,
         notes,
         termsAndConditions,
@@ -448,20 +571,23 @@ export function FinanceInvoiceCreate() {
         status,
       } as unknown as Omit<Invoice, "id">;
 
-      // Save invoice first — we need its id to attach a signature image.
+      // Save invoice first — the seal image is attached to its id afterwards.
       const saved = isEditing && editingId
         ? await financeService.updateInvoice(editingId, invoice)
         : await financeService.createInvoice(invoice);
 
-      // Upload signature image if the user selected one (Phase E).
-      if (signatureFile && saved.id) {
+      if (saved.id) {
         try {
-          await financeService.uploadSignature(String(saved.id), signatureFile);
+          if (sealFile) {
+            await financeService.uploadSignature(String(saved.id), sealFile);
+          } else if (removeSeal && existingSealPath) {
+            await financeService.deleteSignature(String(saved.id));
+          }
         } catch (e) {
           toast.error(
             e instanceof Error
-              ? `Invoice saved but signature upload failed: ${e.message}`
-              : "Invoice saved but signature upload failed"
+              ? `Invoice saved but seal & signature update failed: ${e.message}`
+              : "Invoice saved but seal & signature update failed"
           );
         }
       }
@@ -1100,16 +1226,51 @@ export function FinanceInvoiceCreate() {
             </CardContent>
           </Card>
 
-          {/* Payment & Signatory Details */}
+          {/* Seal & Signature */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Stamp className="size-4" />
+                Seal & Signature
+              </CardTitle>
+              <CardDescription>
+                Authorised signatory&apos;s signature with company stamp —
+                printed on the invoice below Terms &amp; Conditions
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <SealSignatureUpload
+                sealPreview={sealPreview}
+                existingSealPath={existingSealPath}
+                onFileChosen={(f) => {
+                  if (sealPreview.startsWith("blob:")) {
+                    URL.revokeObjectURL(sealPreview);
+                  }
+                  setSealFile(f);
+                  setSealPreview(URL.createObjectURL(f));
+                  setRemoveSeal(false);
+                }}
+                onRemove={() => {
+                  if (sealPreview.startsWith("blob:")) {
+                    URL.revokeObjectURL(sealPreview);
+                  }
+                  setSealFile(null);
+                  setSealPreview("");
+                  if (existingSealPath) setRemoveSeal(true);
+                }}
+              />
+            </CardContent>
+          </Card>
+
+          {/* Payment Details */}
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Landmark className="size-4" />
-                Payment & Signatory Details
+                Payment Details
               </CardTitle>
               <CardDescription>
-                Bank remittance info and authorised signatory shown on the
-                invoice
+                Bank remittance info shown on the invoice
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
@@ -1179,75 +1340,6 @@ export function FinanceInvoiceCreate() {
                 </div>
               </div>
 
-              {/* Signatory */}
-              <div>
-                <h4 className="text-sm font-medium mb-3">Authorised Signatory</h4>
-                <div className="grid grid-cols-2 gap-4 items-start">
-                  <div className="space-y-2">
-                    <Label htmlFor="sigName">Signatory Name</Label>
-                    <Input
-                      id="sigName"
-                      value={signatory.name}
-                      onChange={(e) =>
-                        setSignatory({ ...signatory, name: e.target.value })
-                      }
-                      placeholder="e.g., Rajesh Sharma"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="sigImage">Signature Image</Label>
-                    <div className="flex items-center gap-3">
-                      <Label
-                        htmlFor="sigImage"
-                        className="inline-flex items-center gap-2 px-3 py-2 border rounded-md cursor-pointer hover:bg-muted/40 text-sm"
-                      >
-                        <Upload className="size-4" />
-                        {signatureFile ? "Change" : "Upload"}
-                      </Label>
-                      <input
-                        id="sigImage"
-                        type="file"
-                        accept="image/png,image/jpeg,image/svg+xml"
-                        className="sr-only"
-                        onChange={(e) => {
-                          const f = e.target.files?.[0] ?? null;
-                          setSignatureFile(f);
-                          if (signaturePreview) {
-                            URL.revokeObjectURL(signaturePreview);
-                          }
-                          setSignaturePreview(
-                            f ? URL.createObjectURL(f) : ""
-                          );
-                        }}
-                      />
-                      {signaturePreview && (
-                        <div className="flex items-center gap-2">
-                          <img
-                            src={signaturePreview}
-                            alt="Signature preview"
-                            className="h-10 border rounded bg-white"
-                          />
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => {
-                              URL.revokeObjectURL(signaturePreview);
-                              setSignatureFile(null);
-                              setSignaturePreview("");
-                            }}
-                          >
-                            <X className="size-4" />
-                          </Button>
-                        </div>
-                      )}
-                    </div>
-                    <p className="text-xs text-muted-foreground">
-                      PNG / JPG / SVG, transparent background recommended.
-                    </p>
-                  </div>
-                </div>
-              </div>
             </CardContent>
           </Card>
 

@@ -152,7 +152,7 @@ export function AdminLayout() {
                 <ShoppingCart className="size-5 text-white" />
               </div>
               <div className="flex flex-col">
-                <span className="text-base font-bold leading-tight text-slate-950">TechSolution</span>
+                <span className="text-base font-bold leading-tight text-slate-950">{user?.companyName || "Dashboard"}</span>
                 <span className="text-xs font-medium leading-tight text-slate-500">ERP Suite</span>
               </div>
             </Link>
@@ -211,6 +211,22 @@ export function AdminLayout() {
               <p className="mb-2 px-3 text-[11px] font-bold uppercase tracking-normal text-slate-500">
                 System
               </p>
+              {user?.role === "ROLE_ADMIN" && (
+                <NavLink
+                  to="/admin/users"
+                  icon={Users}
+                  label="Team"
+                  isActive={location.pathname.startsWith("/admin/users")}
+                  onClick={() => setSidebarOpen(false)}
+                />
+              )}
+              <NavLink
+                to="/admin/company-settings"
+                icon={Settings}
+                label="Company"
+                isActive={location.pathname === "/admin/company-settings"}
+                onClick={() => setSidebarOpen(false)}
+              />
               <NavLink
                 to="/admin/settings"
                 icon={Settings}

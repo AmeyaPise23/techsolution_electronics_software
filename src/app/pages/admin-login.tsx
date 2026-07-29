@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate, useSearchParams } from "react-router";
+import { useNavigate, useSearchParams, Link } from "react-router";
 import { useAuth } from "../context/AuthContext";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
@@ -156,10 +156,13 @@ export function AdminLogin() {
             </Button>
           </form>
 
-          {/* Footer */}
           <div className="mt-6 text-center text-sm text-muted-foreground">
-            <p>Internal use only</p>
-            <p className="mt-1">Authorized personnel only</p>
+            <p>
+              Don't have an account?{" "}
+              <Link to="/register" className="text-primary hover:underline font-medium">
+                Register your company
+              </Link>
+            </p>
           </div>
         </CardContent>
       </Card>

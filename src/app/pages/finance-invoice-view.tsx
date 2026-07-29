@@ -56,6 +56,34 @@ export function FinanceInvoiceView() {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [downloading, setDownloading] = useState(false);
+  const [sealUrl, setSealUrl] = useState<string>("");
+
+  // Load the seal & signature image (authenticated) for on-screen preview.
+  useEffect(() => {
+    const path = invoice?.signatureImagePath;
+    if (!path) {
+      setSealUrl("");
+      return;
+    }
+    let cancelled = false;
+    let url = "";
+    (async () => {
+      try {
+        url = await financeService.fetchSignatureObjectUrl(path);
+        if (cancelled) {
+          URL.revokeObjectURL(url);
+          return;
+        }
+        setSealUrl(url);
+      } catch {
+        // No preview if the image can't be loaded.
+      }
+    })();
+    return () => {
+      cancelled = true;
+      if (url) URL.revokeObjectURL(url);
+    };
+  }, [invoice?.signatureImagePath]);
 
   useEffect(() => {
     if (!id) return;
@@ -421,20 +449,28 @@ export function FinanceInvoiceView() {
               </>
             )}
 
-            {/* Signatory (matches the PDF footer layout) */}
-            <div className="mt-8">
-              <p className="text-sm">
-                For <span className="font-semibold">{companyInfo?.name ?? "Techsolution"}</span>
-              </p>
-              <div className="border-t border-gray-400 mt-8 w-56" />
-              <p className="text-sm font-semibold mt-1">
-                {invoice.signatoryName || "Authorized Signatory"}
-              </p>
-              {invoice.signatoryName && (
-                <p className="text-xs text-muted-foreground">
-                  Authorized Signatory
+            {/* Seal & signature (matches the PDF layout below terms) */}
+            <div className="mt-6 flex justify-end">
+              <div className="border rounded-md px-6 py-4 text-center w-64">
+                <p className="text-sm">
+                  For{" "}
+                  <span className="font-semibold">
+                    {companyInfo?.name ?? ""}
+                  </span>
                 </p>
-              )}
+                {sealUrl ? (
+                  <img
+                    src={sealUrl}
+                    alt="Seal & signature"
+                    className="h-16 mx-auto my-2 object-contain"
+                  />
+                ) : (
+                  <div className="h-16" />
+                )}
+                <p className="border-t pt-1 text-xs text-muted-foreground font-medium">
+                  Authorised Signatory &amp; Stamp
+                </p>
+              </div>
             </div>
           </div>
 
@@ -550,8 +586,7 @@ export function FinanceInvoiceView() {
         )}
 
         <p className="text-xs text-muted-foreground italic text-center pt-4 border-t">
-          This is a computer-generated invoice and does not require a physical
-          signature.
+          This is a computer-generated invoice.
         </p>
       </Card>
     </div>

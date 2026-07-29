@@ -31,6 +31,9 @@ import { QuotationCreate } from "./pages/quotation-create";
 import { QuotationView } from "./pages/quotation-view";
 import { AdminCategories } from "./pages/admin-categories";
 import { AdminLogin } from "./pages/admin-login";
+import { AdminUsers } from "./pages/admin-users";
+import { AdminCompanySettings } from "./pages/admin-company-settings";
+import { CompanyRegister } from "./pages/company-register";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 import { Cart } from "./pages/cart";
 import { Checkout } from "./pages/checkout";
@@ -70,6 +73,10 @@ export const router = createBrowserRouter([
   {
     path: "/admin/login",
     Component: AdminLogin,
+  },
+  {
+    path: "/register",
+    Component: CompanyRegister,
   },
   {
     path: "/admin",
@@ -118,6 +125,14 @@ export const router = createBrowserRouter([
       {
         path: "orders",
         Component: AdminOrders,
+      },
+      {
+        path: "users",
+        Component: AdminUsers,
+      },
+      {
+        path: "company-settings",
+        Component: AdminCompanySettings,
       },
       {
         path: "settings",
