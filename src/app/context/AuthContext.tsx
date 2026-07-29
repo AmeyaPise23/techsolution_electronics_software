@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from "react";
-import { authService, User, LoginRequest } from "../services/authService";
+import { authService, User, LoginRequest, CompanyRegistrationRequest, CompanyRegistrationResponse } from "../services/authService";
 
 interface AuthContextType {
   user: User | null;
@@ -7,6 +7,7 @@ interface AuthContextType {
   isLoading: boolean;
   login: (credentials: LoginRequest) => Promise<void>;
   logout: () => void;
+  registerCompany: (request: CompanyRegistrationRequest) => Promise<CompanyRegistrationResponse>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -16,7 +17,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    // Check if user is already authenticated on mount
     checkAuth();
   }, []);
 
@@ -28,7 +28,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       } else {
         setUser(null);
       }
-    } catch (error) {
+    } catch {
       setUser(null);
     } finally {
       setIsLoading(false);
@@ -37,7 +37,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = async (credentials: LoginRequest) => {
     const response = await authService.login(credentials);
-    setUser({ username: response.username, role: response.role });
+    setUser({
+      username: response.username,
+      role: response.role,
+      companyId: response.companyId,
+      companyName: response.companyName,
+      companyCode: response.companyCode,
+    });
+  };
+
+  const registerCompany = async (request: CompanyRegistrationRequest) => {
+    const response = await authService.registerCompany(request);
+    setUser({
+      username: response.username,
+      role: response.role,
+      companyId: response.companyId,
+      companyName: response.companyName,
+      companyCode: response.companyCode,
+    });
+    return response;
   };
 
   const logout = () => {
@@ -51,6 +69,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     isLoading,
     login,
     logout,
+    registerCompany,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

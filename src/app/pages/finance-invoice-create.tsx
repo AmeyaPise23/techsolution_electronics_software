@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { useNavigate } from "react-router";
+import { useEffect, useRef, useState } from "react";
+import { useNavigate, useParams } from "react-router";
 import { financeService, Invoice } from "../services/financeService";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
@@ -13,7 +13,9 @@ import {
   SelectValue,
 } from "../components/ui/select";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../components/ui/card";
-import { Plus, X, ArrowLeft } from "lucide-react";
+import { Checkbox } from "../components/ui/checkbox";
+import { RadioGroup, RadioGroupItem } from "../components/ui/radio-group";
+import { Plus, X, ArrowLeft, Truck, Percent, Landmark, Stamp, Upload } from "lucide-react";
 import { toast } from "sonner";
 
 interface InvoiceItem {
@@ -23,8 +25,51 @@ interface InvoiceItem {
   unitPrice: number;
   discount: number;
   gst: number;
+  uom: string;
   total: number;
 }
+
+// Indian states with GST state codes.
+const INDIAN_STATES: { code: string; name: string }[] = [
+  { code: "01", name: "Jammu & Kashmir" },
+  { code: "02", name: "Himachal Pradesh" },
+  { code: "03", name: "Punjab" },
+  { code: "04", name: "Chandigarh" },
+  { code: "05", name: "Uttarakhand" },
+  { code: "06", name: "Haryana" },
+  { code: "07", name: "Delhi" },
+  { code: "08", name: "Rajasthan" },
+  { code: "09", name: "Uttar Pradesh" },
+  { code: "10", name: "Bihar" },
+  { code: "11", name: "Sikkim" },
+  { code: "12", name: "Arunachal Pradesh" },
+  { code: "13", name: "Nagaland" },
+  { code: "14", name: "Manipur" },
+  { code: "15", name: "Mizoram" },
+  { code: "16", name: "Tripura" },
+  { code: "17", name: "Meghalaya" },
+  { code: "18", name: "Assam" },
+  { code: "19", name: "West Bengal" },
+  { code: "20", name: "Jharkhand" },
+  { code: "21", name: "Odisha" },
+  { code: "22", name: "Chhattisgarh" },
+  { code: "23", name: "Madhya Pradesh" },
+  { code: "24", name: "Gujarat" },
+  { code: "27", name: "Maharashtra" },
+  { code: "29", name: "Karnataka" },
+  { code: "30", name: "Goa" },
+  { code: "32", name: "Kerala" },
+  { code: "33", name: "Tamil Nadu" },
+  { code: "34", name: "Puducherry" },
+  { code: "36", name: "Telangana" },
+  { code: "37", name: "Andhra Pradesh" },
+];
+
+const UOM_OPTIONS: string[] = [
+  "nos", "pcs", "kg", "gm", "ltr", "ml",
+  "mtr", "cm", "hrs", "days", "months", "years",
+  "box", "pack", "set", "unit",
+];
 
 const DEFAULT_TERMS = `1. Warranty - 3 Months from Date of Invoice
 2. Payment - 45 Days from the date of Invoice
@@ -34,8 +79,126 @@ const DEFAULT_TERMS = `1. Warranty - 3 Months from Date of Invoice
 6. Warranty has been voided in case of burn,broken or fault occur high electricity
 7. Subject to Jurisdiction of the Courts at Pune Only`;
 
+/**
+ * Seal & Signature upload widget.
+ *
+ * The file <input> is positioned as a transparent overlay directly on top of
+ * the click surface (drop-zone or Replace button) rather than being hidden
+ * elsewhere in the tree. This matters:
+ *   • Chrome scrolls the focused input into view when the user activates the
+ *     picker. A hidden `sr-only` input lives at position (0,0) of its offset
+ *     parent, so the scroll container ends up jumping past all content —
+ *     the user sees the page blank/scrolled-to-nothing. Overlay = no jump.
+ *   • Some Linux + Chromium builds don't repaint the surface behind the
+ *     native file dialog cleanly. We snapshot the scroll position on click
+ *     and restore it when focus returns, so even if the dialog quirk fires
+ *     the user lands back where they were.
+ */
+function SealSignatureUpload({
+  sealPreview,
+  existingSealPath,
+  onFileChosen,
+  onRemove,
+}: {
+  sealPreview: string;
+  existingSealPath: string;
+  onFileChosen: (file: File) => void;
+  onRemove: () => void;
+}) {
+  const scrollSnapshotRef = useRef<{ el: Element; top: number } | null>(null);
+
+  const handlePickerOpen = () => {
+    const main = document.querySelector("main");
+    if (main) {
+      scrollSnapshotRef.current = { el: main, top: main.scrollTop };
+    }
+    const restore = () => {
+      const snap = scrollSnapshotRef.current;
+      if (snap) (snap.el as HTMLElement).scrollTop = snap.top;
+      window.removeEventListener("focus", restore);
+    };
+    window.addEventListener("focus", restore);
+  };
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0] ?? null;
+    e.target.value = ""; // allow re-selecting the same file later
+    if (!f) return;
+    if (f.size > 2 * 1024 * 1024) {
+      toast.error("Seal & signature image must be under 2MB");
+      return;
+    }
+    onFileChosen(f);
+  };
+
+  const overlayInput = (extraClass = "") => (
+    <input
+      type="file"
+      accept="image/png,image/jpeg"
+      className={`absolute inset-0 h-full w-full opacity-0 cursor-pointer ${extraClass}`}
+      onClick={handlePickerOpen}
+      onChange={handleChange}
+      aria-label="Seal and signature image"
+    />
+  );
+
+  if (sealPreview || existingSealPath) {
+    return (
+      <div className="flex items-center gap-5">
+        <div className="border rounded-lg bg-white p-3 shadow-sm">
+          {sealPreview ? (
+            <img
+              src={sealPreview}
+              alt="Seal & signature preview"
+              className="h-20 max-w-56 object-contain"
+            />
+          ) : (
+            <div className="h-20 w-40 flex items-center justify-center text-xs text-muted-foreground">
+              Loading…
+            </div>
+          )}
+        </div>
+        <div className="flex flex-col gap-2">
+          <div className="relative inline-flex items-center gap-2 px-3 py-2 border rounded-md hover:bg-muted/40 text-sm font-normal cursor-pointer">
+            <Upload className="size-4" />
+            Replace
+            {overlayInput()}
+          </div>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="text-destructive justify-start"
+            onClick={onRemove}
+          >
+            <X className="size-4 mr-1" />
+            Remove
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="relative flex flex-col items-center justify-center gap-2 border-2 border-dashed rounded-lg p-8 hover:border-primary/50 hover:bg-muted/30 transition-colors text-center cursor-pointer">
+      <Stamp className="size-8 text-muted-foreground pointer-events-none" />
+      <span className="text-sm font-medium pointer-events-none">
+        Upload signature &amp; stamp image
+      </span>
+      <span className="text-xs text-muted-foreground font-normal pointer-events-none">
+        PNG or JPG, up to 2MB — a transparent background looks best on the invoice
+      </span>
+      {overlayInput()}
+    </div>
+  );
+}
+
 export function FinanceInvoiceCreate() {
   const navigate = useNavigate();
+  const { id: editingId } = useParams();
+  const isEditing = !!editingId;
+  const [loadingInvoice, setLoadingInvoice] = useState<boolean>(isEditing);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [customer, setCustomer] = useState({
     name: "",
     company: "",
@@ -67,6 +230,7 @@ export function FinanceInvoiceCreate() {
       unitPrice: 0,
       discount: 0,
       gst: 18,
+      uom: "nos",
       total: 0,
     },
   ]);
@@ -86,6 +250,154 @@ export function FinanceInvoiceCreate() {
   const [autoRoundOff, setAutoRoundOff] = useState(true);
   const [paymentAmount, setPaymentAmount] = useState(0);
 
+  // ── Shipping (GST) ──
+  const [shipping, setShipping] = useState({
+    sameAsBilling: true,
+    address: "",
+    state: "",
+    stateCode: "",
+  });
+
+  // ── Tax & GST Compliance ──
+  const [tax, setTax] = useState({
+    placeOfSupply: "",
+    rcmApplicable: false,
+    customerPan: "",
+  });
+
+  // ── Payment / Bank Details ──
+  const [payment, setPayment] = useState({
+    bankName: "",
+    accountNumber: "",
+    ifscCode: "",
+    branch: "",
+    upiId: "",
+  });
+
+  // ── Seal & signature (stamp image printed below Terms & Conditions) ──
+  const [sealFile, setSealFile] = useState<File | null>(null);
+  const [sealPreview, setSealPreview] = useState<string>("");
+  const [existingSealPath, setExistingSealPath] = useState<string>("");
+  const [removeSeal, setRemoveSeal] = useState(false);
+
+  // Load the stored seal image for preview when editing.
+  useEffect(() => {
+    if (!existingSealPath) return;
+    let cancelled = false;
+    let url = "";
+    (async () => {
+      try {
+        url = await financeService.fetchSignatureObjectUrl(existingSealPath);
+        if (cancelled) {
+          URL.revokeObjectURL(url);
+          return;
+        }
+        setSealPreview(url);
+      } catch {
+        // Missing image is not fatal — the upload zone is shown instead.
+      }
+    })();
+    return () => {
+      cancelled = true;
+      if (url) URL.revokeObjectURL(url);
+    };
+  }, [existingSealPath]);
+
+  // Keep shipping in sync with billing when "same as billing" is checked.
+  useEffect(() => {
+    if (!shipping.sameAsBilling) return;
+    setShipping((prev) => ({
+      ...prev,
+      address: customer.address,
+      state: prev.state, // state / stateCode aren't on the billing customer today
+      stateCode: prev.stateCode,
+    }));
+  }, [customer.address, shipping.sameAsBilling]);
+
+  // ── Edit-mode loader ──
+  useEffect(() => {
+    if (!editingId) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        setLoadingInvoice(true);
+        setLoadError(null);
+        const inv = await financeService.getInvoiceById(editingId);
+        if (cancelled) return;
+        if (!inv) {
+          setLoadError(`Invoice #${editingId} not found`);
+          return;
+        }
+        setCustomer({
+          name: inv.customer?.name ?? "",
+          company: inv.customer?.company ?? "",
+          email: inv.customer?.email ?? "",
+          phone: inv.customer?.phone ?? "",
+          address: inv.customer?.address ?? "",
+          gstNumber: inv.customer?.gstNumber ?? "",
+        });
+        // Prefix and number are stored independently on the backend now — no
+        // string-slicing acrobatics.
+        setInvoiceInfo({
+          invoicePrefix: inv.invoicePrefix ?? "TS/26-27/",
+          invoiceNumber: inv.invoiceNumber ?? "",
+          invoiceDate: inv.invoiceDate ?? new Date().toISOString().split("T")[0],
+          paymentTermsDays: inv.paymentTermsDays ?? 30,
+          dueDate: inv.dueDate ?? new Date().toISOString().split("T")[0],
+          poNumber: inv.poNumber ?? "",
+          poDate: inv.poDate ?? "",
+          ewayBillNo: inv.ewayBillNo ?? "",
+          vehicleNo: inv.vehicleNo ?? "",
+        });
+        setItems(
+          (inv.items ?? []).length > 0
+            ? inv.items.map((it) => ({
+                productName: it.productName ?? "",
+                hsnSac: it.hsnSac ?? "",
+                quantity: it.quantity ?? 1,
+                unitPrice: it.unitPrice ?? 0,
+                discount: it.discount ?? 0,
+                gst: it.gst ?? 0,
+                uom: (it as { uom?: string }).uom ?? "nos",
+                total: it.total ?? 0,
+              }))
+            : [
+                {
+                  productName: "",
+                  hsnSac: "",
+                  quantity: 1,
+                  unitPrice: 0,
+                  discount: 0,
+                  gst: 18,
+                  total: 0,
+                },
+              ]
+        );
+        setNotes(inv.notes ?? "");
+        setShowNotes(!!inv.notes);
+        setTermsAndConditions(inv.termsAndConditions ?? DEFAULT_TERMS);
+        setExistingSealPath(inv.signatureImagePath ?? "");
+        if ((inv.additionalCharges ?? 0) > 0) {
+          setShowAdditionalCharges(true);
+          setAdditionalCharges(inv.additionalCharges ?? 0);
+        }
+        setPaymentAmount(inv.paymentAmount ?? 0);
+      } catch (e) {
+        if (!cancelled) {
+          const msg =
+            e instanceof Error ? e.message : "Failed to load invoice for editing";
+          toast.error(msg);
+          setLoadError(msg);
+        }
+      } finally {
+        if (!cancelled) setLoadingInvoice(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [editingId]);
+
   const addItem = () => {
     setItems([
       ...items,
@@ -96,6 +408,7 @@ export function FinanceInvoiceCreate() {
         unitPrice: 0,
         discount: 0,
         gst: 18,
+        uom: "nos",
         total: 0,
       },
     ]);
@@ -211,9 +524,17 @@ export function FinanceInvoiceCreate() {
       }
 
       const invoice = {
+        // Store prefix and number separately end-to-end (Phase E fix — no more
+        // string-concat + string-split round trip that broke edit-mode when a
+        // prefix was ever changed).
         invoicePrefix: invoiceInfo.invoicePrefix,
-        invoiceNumber: `${invoiceInfo.invoicePrefix}${invoiceInfo.invoiceNumber}`,
-        customer,
+        invoiceNumber: invoiceInfo.invoiceNumber,
+        customer: {
+          ...customer,
+          pan: tax.customerPan,
+          state: shipping.state,
+          stateCode: shipping.stateCode,
+        },
         invoiceDate: invoiceInfo.invoiceDate,
         dueDate: invoiceInfo.dueDate,
         paymentTermsDays: invoiceInfo.paymentTermsDays,
@@ -221,6 +542,22 @@ export function FinanceInvoiceCreate() {
         poDate: invoiceInfo.poDate,
         ewayBillNo: invoiceInfo.ewayBillNo,
         vehicleNo: invoiceInfo.vehicleNo,
+        // Shipping (GST)
+        shipping: {
+          sameAsBilling: shipping.sameAsBilling,
+          address: shipping.sameAsBilling ? customer.address : shipping.address,
+          state: shipping.state,
+          stateCode: shipping.stateCode,
+        },
+        // Tax & GST
+        placeOfSupply: tax.placeOfSupply,
+        rcmApplicable: tax.rcmApplicable,
+        // Bank / payment
+        bankName: payment.bankName,
+        bankAccountNumber: payment.accountNumber,
+        bankIfsc: payment.ifscCode,
+        bankBranch: payment.branch,
+        bankUpi: payment.upiId,
         items,
         notes,
         termsAndConditions,
@@ -232,11 +569,39 @@ export function FinanceInvoiceCreate() {
         grandTotal: totals.grandTotal,
         paymentAmount,
         status,
-      } as Omit<Invoice, "id">;
+      } as unknown as Omit<Invoice, "id">;
 
-      await financeService.createInvoice(invoice);
-      toast.success(`Invoice ${status === "draft" ? "saved as draft" : "created"} successfully`);
-      navigate("/admin/finance/invoices");
+      // Save invoice first — the seal image is attached to its id afterwards.
+      const saved = isEditing && editingId
+        ? await financeService.updateInvoice(editingId, invoice)
+        : await financeService.createInvoice(invoice);
+
+      if (saved.id) {
+        try {
+          if (sealFile) {
+            await financeService.uploadSignature(String(saved.id), sealFile);
+          } else if (removeSeal && existingSealPath) {
+            await financeService.deleteSignature(String(saved.id));
+          }
+        } catch (e) {
+          toast.error(
+            e instanceof Error
+              ? `Invoice saved but seal & signature update failed: ${e.message}`
+              : "Invoice saved but seal & signature update failed"
+          );
+        }
+      }
+
+      toast.success(
+        `Invoice ${
+          status === "draft" ? "saved as draft" : isEditing ? "updated" : "created"
+        } successfully`
+      );
+      navigate(
+        isEditing && editingId
+          ? `/admin/finance/invoices/${editingId}`
+          : "/admin/finance/invoices"
+      );
     } catch (error) {
       console.error("Error creating invoice:", error);
       toast.error(error instanceof Error ? error.message : "Failed to create invoice");
@@ -251,6 +616,25 @@ export function FinanceInvoiceCreate() {
     }).format(value);
   };
 
+  if (isEditing && loadError) {
+    return (
+      <div className="p-6 space-y-4">
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => navigate("/admin/finance/invoices")}
+        >
+          <ArrowLeft className="size-4 mr-2" />
+          Back to invoices
+        </Button>
+        <div className="rounded-md border border-destructive/30 bg-destructive/5 p-4 text-sm">
+          <div className="font-medium">Could not open invoice for editing</div>
+          <div className="text-muted-foreground mt-1">{loadError}</div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="p-6 space-y-6">
       {/* Header */}
@@ -263,8 +647,16 @@ export function FinanceInvoiceCreate() {
           <ArrowLeft className="size-5" />
         </Button>
         <div>
-          <h1 className="mb-1">Create Invoice</h1>
-          <p className="text-muted-foreground">Generate a new invoice for your customer</p>
+          <h1 className="mb-1">
+            {isEditing ? "Edit Invoice" : "Create Invoice"}
+          </h1>
+          <p className="text-muted-foreground">
+            {isEditing
+              ? loadingInvoice
+                ? "Loading invoice…"
+                : "Review and modify the invoice before saving."
+              : "Generate a new invoice for your customer"}
+          </p>
         </div>
       </div>
 
@@ -342,6 +734,174 @@ export function FinanceInvoiceCreate() {
                     setCustomer({ ...customer, gstNumber: e.target.value })
                   }
                 />
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Shipping Details */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Truck className="size-4" />
+                Shipping Details
+              </CardTitle>
+              <CardDescription>
+                Where the goods/services will be delivered
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex items-center gap-2">
+                <Checkbox
+                  id="sameAsBilling"
+                  checked={shipping.sameAsBilling}
+                  onCheckedChange={(v) => {
+                    const checked = v === true;
+                    setShipping((prev) => ({
+                      ...prev,
+                      sameAsBilling: checked,
+                      address: checked ? customer.address : prev.address,
+                    }));
+                  }}
+                />
+                <Label htmlFor="sameAsBilling" className="cursor-pointer">
+                  Same as billing address
+                </Label>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="shippingAddress">Shipping Address</Label>
+                <Textarea
+                  id="shippingAddress"
+                  value={
+                    shipping.sameAsBilling ? customer.address : shipping.address
+                  }
+                  onChange={(e) =>
+                    setShipping({ ...shipping, address: e.target.value })
+                  }
+                  disabled={shipping.sameAsBilling}
+                  rows={3}
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="shipState">Customer State</Label>
+                  <Select
+                    value={shipping.state}
+                    onValueChange={(v) => {
+                      const s = INDIAN_STATES.find((x) => x.name === v);
+                      setShipping({
+                        ...shipping,
+                        state: v,
+                        stateCode: s?.code ?? shipping.stateCode,
+                      });
+                    }}
+                  >
+                    <SelectTrigger id="shipState">
+                      <SelectValue placeholder="Select state" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {INDIAN_STATES.map((s) => (
+                        <SelectItem key={s.code} value={s.name}>
+                          {s.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="shipStateCode">State Code</Label>
+                  <Input
+                    id="shipStateCode"
+                    value={shipping.stateCode}
+                    onChange={(e) =>
+                      setShipping({ ...shipping, stateCode: e.target.value })
+                    }
+                    placeholder="e.g., 27"
+                    maxLength={2}
+                  />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Tax & GST Compliance */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Percent className="size-4" />
+                Tax & GST Compliance
+              </CardTitle>
+              <CardDescription>
+                Place of supply, RCM and customer PAN
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="placeOfSupply">Place of Supply *</Label>
+                  <Select
+                    value={tax.placeOfSupply}
+                    onValueChange={(v) =>
+                      setTax({ ...tax, placeOfSupply: v })
+                    }
+                  >
+                    <SelectTrigger id="placeOfSupply">
+                      <SelectValue placeholder="Select state" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {INDIAN_STATES.map((s) => (
+                        <SelectItem key={s.code} value={s.name}>
+                          {s.code} — {s.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="customerPan">Customer PAN</Label>
+                  <Input
+                    id="customerPan"
+                    value={tax.customerPan}
+                    onChange={(e) =>
+                      setTax({
+                        ...tax,
+                        customerPan: e.target.value.toUpperCase(),
+                      })
+                    }
+                    placeholder="AAACE1234F"
+                    maxLength={10}
+                    className="uppercase"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Reverse Charge Mechanism (RCM)</Label>
+                <RadioGroup
+                  value={tax.rcmApplicable ? "yes" : "no"}
+                  onValueChange={(v) =>
+                    setTax({ ...tax, rcmApplicable: v === "yes" })
+                  }
+                  className="flex gap-6"
+                >
+                  <div className="flex items-center gap-2">
+                    <RadioGroupItem value="no" id="rcm-no" />
+                    <Label htmlFor="rcm-no" className="cursor-pointer">
+                      No
+                    </Label>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <RadioGroupItem value="yes" id="rcm-yes" />
+                    <Label htmlFor="rcm-yes" className="cursor-pointer">
+                      Yes
+                    </Label>
+                  </div>
+                </RadioGroup>
+                <p className="text-xs text-muted-foreground">
+                  Enable if the recipient is liable to pay tax under reverse
+                  charge.
+                </p>
               </div>
             </CardContent>
           </Card>
@@ -519,7 +1079,25 @@ export function FinanceInvoiceCreate() {
                         }
                       />
                     </div>
-                    <div className="col-span-2 space-y-2">
+                    <div className="col-span-1 space-y-2">
+                      <Label className="text-xs">UoM</Label>
+                      <Select
+                        value={item.uom}
+                        onValueChange={(v) => updateItem(index, "uom", v)}
+                      >
+                        <SelectTrigger className="h-9">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {UOM_OPTIONS.map((u) => (
+                            <SelectItem key={u} value={u}>
+                              {u}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="col-span-1 space-y-2">
                       <Label className="text-xs">Unit Price</Label>
                       <Input
                         type="number"
@@ -648,15 +1226,151 @@ export function FinanceInvoiceCreate() {
             </CardContent>
           </Card>
 
+          {/* Seal & Signature */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Stamp className="size-4" />
+                Seal & Signature
+              </CardTitle>
+              <CardDescription>
+                Authorised signatory&apos;s signature with company stamp —
+                printed on the invoice below Terms &amp; Conditions
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <SealSignatureUpload
+                sealPreview={sealPreview}
+                existingSealPath={existingSealPath}
+                onFileChosen={(f) => {
+                  if (sealPreview.startsWith("blob:")) {
+                    URL.revokeObjectURL(sealPreview);
+                  }
+                  setSealFile(f);
+                  setSealPreview(URL.createObjectURL(f));
+                  setRemoveSeal(false);
+                }}
+                onRemove={() => {
+                  if (sealPreview.startsWith("blob:")) {
+                    URL.revokeObjectURL(sealPreview);
+                  }
+                  setSealFile(null);
+                  setSealPreview("");
+                  if (existingSealPath) setRemoveSeal(true);
+                }}
+              />
+            </CardContent>
+          </Card>
+
+          {/* Payment Details */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Landmark className="size-4" />
+                Payment Details
+              </CardTitle>
+              <CardDescription>
+                Bank remittance info shown on the invoice
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              {/* Bank */}
+              <div>
+                <h4 className="text-sm font-medium mb-3">Bank Details</h4>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="bankName">Bank Name</Label>
+                    <Input
+                      id="bankName"
+                      value={payment.bankName}
+                      onChange={(e) =>
+                        setPayment({ ...payment, bankName: e.target.value })
+                      }
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="accountNumber">Account Number</Label>
+                    <Input
+                      id="accountNumber"
+                      value={payment.accountNumber}
+                      onChange={(e) =>
+                        setPayment({
+                          ...payment,
+                          accountNumber: e.target.value,
+                        })
+                      }
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="ifsc">IFSC Code</Label>
+                    <Input
+                      id="ifsc"
+                      value={payment.ifscCode}
+                      onChange={(e) =>
+                        setPayment({
+                          ...payment,
+                          ifscCode: e.target.value.toUpperCase(),
+                        })
+                      }
+                      className="uppercase"
+                      maxLength={11}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="branch">Branch</Label>
+                    <Input
+                      id="branch"
+                      value={payment.branch}
+                      onChange={(e) =>
+                        setPayment({ ...payment, branch: e.target.value })
+                      }
+                    />
+                  </div>
+                  <div className="space-y-2 col-span-2">
+                    <Label htmlFor="upi">UPI ID</Label>
+                    <Input
+                      id="upi"
+                      value={payment.upiId}
+                      onChange={(e) =>
+                        setPayment({ ...payment, upiId: e.target.value })
+                      }
+                      placeholder="name@bank"
+                    />
+                  </div>
+                </div>
+              </div>
+
+            </CardContent>
+          </Card>
+
           {/* Actions */}
           <div className="flex gap-3 justify-end">
-            <Button variant="outline" onClick={() => navigate("/admin/finance/invoices")}>
+            <Button
+              variant="outline"
+              onClick={() =>
+                navigate(
+                  isEditing && editingId
+                    ? `/admin/finance/invoices/${editingId}`
+                    : "/admin/finance/invoices"
+                )
+              }
+              disabled={loadingInvoice}
+            >
               Cancel
             </Button>
-            <Button variant="outline" onClick={() => handleSave("draft")}>
+            <Button
+              variant="outline"
+              onClick={() => handleSave("draft")}
+              disabled={loadingInvoice}
+            >
               Save as Draft
             </Button>
-            <Button onClick={() => handleSave("generated")}>Create Invoice</Button>
+            <Button
+              onClick={() => handleSave("generated")}
+              disabled={loadingInvoice}
+            >
+              {isEditing ? "Save Invoice" : "Create Invoice"}
+            </Button>
           </div>
         </div>
 

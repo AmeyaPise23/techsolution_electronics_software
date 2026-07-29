@@ -88,6 +88,71 @@ export interface Vendor {
   paymentStatus: "pending" | "paid" | "overdue";
 }
 
+export interface InvoiceDashboardData {
+  dateFrom: string;
+  dateTo: string;
+  summary: {
+    totalInvoiced: number;
+    collected: number;
+    outstanding: number;
+    overdue: number;
+    invoiceCount: number;
+    overdueCount: number;
+    totalInvoicedChangePercent: number;
+    collectedChangePercent: number;
+    outstandingChangePercent: number;
+  };
+  trend: {
+    month: string;
+    monthStart: string;
+    totalInvoiced: number;
+    invoiceCount: number;
+  }[];
+  aging: {
+    totalOutstanding: number;
+    buckets: {
+      label: string;
+      fromDays: number;
+      toDays?: number;
+      amount: number;
+      invoiceCount: number;
+      percentage: number;
+    }[];
+  };
+}
+
+export interface InvoiceReminderResponse {
+  invoiceId: string;
+  invoiceNumber: string;
+  customerName: string;
+  recipientEmail?: string;
+  channel: string;
+  balanceDue: number;
+  dueDate: string;
+  overdue: boolean;
+  status: "ready" | "missing_recipient" | string;
+  message: string;
+  createdAt: string;
+}
+
+export interface InvoiceCompanyInfo {
+  name: string;
+  addressLine1: string;
+  addressLine2: string;
+  gstin: string;
+  pan: string;
+  stateName: string;
+  stateCode: string;
+  email: string;
+  phone: string;
+  bankName: string;
+  bankAccountName: string;
+  bankAccountNumber: string;
+  bankIfsc: string;
+  bankBranch: string;
+  bankUpi: string;
+}
+
 export interface Invoice {
   id: string;
   invoicePrefix?: string;
@@ -115,17 +180,30 @@ export interface Invoice {
     productImage?: string;
     category?: string;
     hsnSac?: string;
+    uom?: string;
     quantity: number;
     unitPrice: number;
     discount: number;
     gst: number;
     total: number;
+    // computed (read-only from backend)
+    discountAmount?: number;
+    taxableAmount?: number;
+    gstAmount?: number;
+    cgstAmount?: number;
+    sgstAmount?: number;
+    igstAmount?: number;
   }[];
   subtotal: number;
+  itemDiscountTotal?: number;
+  additionalDiscount?: number;
   totalDiscount: number;
   additionalCharges?: number;
   taxableAmount?: number;
   totalGst: number;
+  cgstTotal?: number;
+  sgstTotal?: number;
+  igstTotal?: number;
   roundOffAmount?: number;
   grandTotal: number;
   paymentAmount?: number;
@@ -137,6 +215,32 @@ export interface Invoice {
   createdAt?: string;
   updatedAt?: string;
   status: "draft" | "generated" | "partially_paid" | "paid" | "cancelled";
+
+  // ── Bill-to extras ──
+  billToPan?: string;
+  billToStateCode?: string;
+
+  // ── Shipping ──
+  sameShippingAsBilling?: boolean;
+  shipToName?: string;
+  shipToCompany?: string;
+  shipToAddress?: string;
+  shipToState?: string;
+  shipToStateCode?: string;
+
+  // ── GST compliance ──
+  placeOfSupply?: string;
+  rcmApplicable?: boolean;
+
+  // ── Bank ──
+  bankName?: string;
+  bankAccountNumber?: string;
+  bankIfsc?: string;
+  bankBranch?: string;
+  bankUpi?: string;
+
+  // ── Seal & signature ──
+  signatureImagePath?: string;
 }
 
 export interface CashFlowData {
@@ -516,12 +620,65 @@ export const financeService = {
     return parseJsonResponse<Invoice[]>(response);
   },
 
+  /** Phase E: server-side paged/filtered search — used by the list page. */
+  async searchInvoices(params: {
+    q?: string;
+    status?: Invoice["status"];
+    customerId?: string;
+    dateFrom?: string;
+    dateTo?: string;
+    page?: number;
+    size?: number;
+    sort?: string;
+  } = {}): Promise<{
+    content: Invoice[];
+    totalElements: number;
+    totalPages: number;
+    number: number;
+    size: number;
+    first: boolean;
+    last: boolean;
+  }> {
+    const qs = new URLSearchParams();
+    Object.entries(params).forEach(([k, v]) => {
+      if (v !== undefined && v !== null && v !== "") qs.set(k, String(v));
+    });
+    if (!qs.has("page")) qs.set("page", "0");
+    if (!qs.has("size")) qs.set("size", "20");
+    if (!qs.has("sort")) qs.set("sort", "createdAt,desc");
+    const response = await authService.authenticatedFetch(
+      `${API_BASE_URL}/invoices/search?${qs.toString()}`
+    );
+    return parseJsonResponse(response);
+  },
+
+  async getInvoiceDashboard(params: {
+    dateFrom?: string;
+    dateTo?: string;
+    trendMonths?: number;
+  } = {}): Promise<InvoiceDashboardData> {
+    const qs = new URLSearchParams();
+    Object.entries(params).forEach(([key, value]) => {
+      if (value !== undefined && value !== null && value !== "") qs.set(key, String(value));
+    });
+    const suffix = qs.toString() ? `?${qs.toString()}` : "";
+    const response = await authService.authenticatedFetch(
+      `${API_BASE_URL}/invoices/dashboard${suffix}`
+    );
+    return parseJsonResponse<InvoiceDashboardData>(response);
+  },
+
   async getInvoiceById(id: string): Promise<Invoice | null> {
     const response = await authService.authenticatedFetch(`${API_BASE_URL}/invoices/${id}`);
     if (response.status === 404) {
       return null;
     }
     return parseJsonResponse<Invoice>(response);
+  },
+
+  async getInvoiceCompanyInfo(): Promise<InvoiceCompanyInfo> {
+    const response = await authService.authenticatedFetch(`${API_BASE_URL}/invoices/company-info`);
+    return parseJsonResponse<InvoiceCompanyInfo>(response);
   },
 
   async createInvoice(invoice: Omit<Invoice, "id">): Promise<Invoice> {
@@ -531,6 +688,38 @@ export const financeService = {
       body: JSON.stringify(normalizeInvoicePayload(invoice)),
     });
     return parseJsonResponse<Invoice>(response);
+  },
+
+  async uploadSignature(id: string, file: File): Promise<Invoice> {
+    const form = new FormData();
+    form.append("file", file);
+    const response = await authService.authenticatedFetch(
+      `${API_BASE_URL}/invoices/${id}/signature`,
+      { method: "POST", body: form }
+    );
+    return parseJsonResponse<Invoice>(response);
+  },
+
+  async deleteSignature(id: string): Promise<Invoice> {
+    const response = await authService.authenticatedFetch(
+      `${API_BASE_URL}/invoices/${id}/signature`,
+      { method: "DELETE" }
+    );
+    return parseJsonResponse<Invoice>(response);
+  },
+
+  signatureUrl(fileName: string): string {
+    return `${API_BASE_URL}/invoices/signature/${encodeURIComponent(fileName)}`;
+  },
+
+  /** Fetch the seal & signature image with auth and return an object URL
+   *  usable in an <img> tag. Caller must revoke it when done. */
+  async fetchSignatureObjectUrl(fileName: string): Promise<string> {
+    const response = await authService.authenticatedFetch(
+      this.signatureUrl(fileName)
+    );
+    if (!response.ok) throw new Error("Failed to load signature image");
+    return URL.createObjectURL(await response.blob());
   },
 
   async generateInvoicePdf(invoiceNumber: string, invoice: Omit<Invoice, "id">): Promise<{ fileName: string; downloadUrl: string }> {
@@ -547,6 +736,27 @@ export const financeService = {
       method: "POST",
     });
     return parseJsonResponse<Invoice>(response);
+  },
+
+  /**
+   * Phase D: single call — server regenerates the PDF and streams it in the
+   * same response. Frontend just triggers the browser download.
+   */
+  async downloadInvoicePdfFresh(id: string, invoiceNumber: string): Promise<void> {
+    const response = await authService.authenticatedFetch(
+      `${API_BASE_URL}/invoices/${id}/pdf`
+    );
+    if (!response.ok) {
+      throw new Error(await getErrorMessage(response));
+    }
+    const blob = await response.blob();
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = `${invoiceNumber}.pdf`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(link.href);
   },
 
   async downloadInvoicePdf(fileName: string): Promise<void> {
@@ -575,6 +785,38 @@ export const financeService = {
     return parseJsonResponse<Invoice>(response);
   },
 
+  async receiveInvoicePayment(id: string, amount: number, notes?: string): Promise<Invoice> {
+    const response = await authService.authenticatedFetch(`${API_BASE_URL}/invoices/${id}/payments`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        amount,
+        paymentDate: new Date().toISOString().slice(0, 10),
+        notes,
+      }),
+    });
+    return parseJsonResponse<Invoice>(response);
+  },
+
+  async sendInvoiceReminder(id: string, message?: string): Promise<InvoiceReminderResponse> {
+    const response = await authService.authenticatedFetch(`${API_BASE_URL}/invoices/${id}/reminders`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ channel: "email", message }),
+    });
+    return parseJsonResponse<InvoiceReminderResponse>(response);
+  },
+
+  async shareInvoice(id: string, body: { recipientEmail: string; recipientName?: string; note?: string }): Promise<{ channel: string; recipientEmail: string; documentNumber: string; status: string; sharedAt: string }> {
+    const response = await authService.authenticatedFetch(`${API_BASE_URL}/invoices/${id}/share`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    const result = await parseJsonResponse<{ success: boolean; message: string; data: { channel: string; recipientEmail: string; documentNumber: string; status: string; sharedAt: string } }>(response);
+    return result.data;
+  },
+
   async deleteInvoice(id: string): Promise<void> {
     const response = await authService.authenticatedFetch(`${API_BASE_URL}/invoices/${id}`, {
       method: "DELETE",
@@ -597,6 +839,8 @@ function normalizeInvoicePayload<T extends Partial<Invoice> | Omit<Invoice, "id"
     ...invoice,
     items: invoice.items?.map((item) => ({
       ...item,
+      // ensure uom always sent so backend column doesn't NULL out on edit
+      uom: item.uom ?? "nos",
       quantity: clampNumber(item.quantity, 1),
       unitPrice: clampNumber(item.unitPrice, 0),
       discount: clampNumber(item.discount, 0, 100),

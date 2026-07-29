@@ -124,18 +124,32 @@
     @apply border-border outline-ring/50;
   }
 
+  html,
+  body {
+    height: 100%;
+    /* App shell owns its own scroll container (<main> in admin-layout).
+       Pinning html/body to the viewport prevents a phantom outer scrollbar
+       when portal-rendered UI (Radix scroll-lock, toasters) inline-styles <html>. */
+    overflow: hidden;
+  }
+
+  html {
+    font-size: var(--font-size);
+  }
+
   body {
     @apply bg-background text-foreground;
+    margin: 0;
+  }
+
+  #root {
+    height: 100%;
   }
 
   /**
   * Default typography styles for HTML elements (h1-h4, p, label, button, input).
   * These are in @layer base, so Tailwind utility classes (like text-sm, text-lg) automatically override them.
   */
-
-  html {
-    font-size: var(--font-size);
-  }
 
   h1 {
     font-size: var(--text-2xl);

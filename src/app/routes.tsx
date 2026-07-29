@@ -11,7 +11,7 @@ import { FinanceOverview } from "./pages/finance-overview";
 import { FinanceRevenue } from "./pages/finance-revenue";
 import { FinanceExpenses } from "./pages/finance-expenses";
 import { FinanceProfit } from "./pages/finance-profit";
-import { FinanceOutsourcing } from "./pages/finance-outsourcing";
+// FinanceOutsourcing moved under Repair — see repair-outsourcing below.
 import { FinanceInvoices } from "./pages/finance-invoices";
 import { FinanceInvoiceCreate } from "./pages/finance-invoice-create";
 import { FinanceInvoiceView } from "./pages/finance-invoice-view";
@@ -21,6 +21,9 @@ import { RepairOrdersDashboard } from "./pages/repair-orders-dashboard";
 import { RepairOrdersList } from "./pages/repair-orders-list";
 import { RepairOrderCreate } from "./pages/repair-order-create";
 import { RepairOrderView } from "./pages/repair-order-view";
+import { RepairOrderEdit } from "./pages/repair-order-edit";
+import { RepairOutsourcing } from "./pages/repair-outsourcing";
+import { Navigate } from "react-router";
 import { SalesOverview } from "./pages/sales-overview";
 import { SalesClients } from "./pages/sales-clients";
 import { SalesQuotations } from "./pages/sales-quotations";
@@ -28,7 +31,13 @@ import { QuotationCreate } from "./pages/quotation-create";
 import { QuotationView } from "./pages/quotation-view";
 import { AdminCategories } from "./pages/admin-categories";
 import { AdminLogin } from "./pages/admin-login";
+import { AdminUsers } from "./pages/admin-users";
+import { AdminCompanySettings } from "./pages/admin-company-settings";
+import { CompanyRegister } from "./pages/company-register";
 import { ProtectedRoute } from "./components/ProtectedRoute";
+import { Cart } from "./pages/cart";
+import { Checkout } from "./pages/checkout";
+import { QuotationConfirmation } from "./pages/quotation-confirmation";
 
 export const router = createBrowserRouter([
   {
@@ -47,11 +56,27 @@ export const router = createBrowserRouter([
         path: "products/:id",
         Component: ProductDetails,
       },
+      {
+        path: "cart",
+        Component: Cart,
+      },
+      {
+        path: "checkout",
+        Component: Checkout,
+      },
+      {
+        path: "quotation/:id",
+        Component: QuotationConfirmation,
+      },
     ],
   },
   {
     path: "/admin/login",
     Component: AdminLogin,
+  },
+  {
+    path: "/register",
+    Component: CompanyRegister,
   },
   {
     path: "/admin",
@@ -102,6 +127,14 @@ export const router = createBrowserRouter([
         Component: AdminOrders,
       },
       {
+        path: "users",
+        Component: AdminUsers,
+      },
+      {
+        path: "company-settings",
+        Component: AdminCompanySettings,
+      },
+      {
         path: "settings",
         Component: AdminSettings,
       },
@@ -122,8 +155,10 @@ export const router = createBrowserRouter([
         Component: FinanceProfit,
       },
       {
+        // Legacy route kept as a redirect so bookmarks don't 404.
+        // Moved to Repair → Outsourcing in Phase 6.
         path: "finance/outsourcing",
-        Component: FinanceOutsourcing,
+        element: <Navigate to="/admin/repair-orders/outsourcing" replace />,
       },
       {
         path: "finance/invoices",
@@ -131,6 +166,11 @@ export const router = createBrowserRouter([
       },
       {
         path: "finance/invoices/create",
+        Component: FinanceInvoiceCreate,
+      },
+      {
+        // Same component; presence of :id switches it into edit mode.
+        path: "finance/invoices/:id/edit",
         Component: FinanceInvoiceCreate,
       },
       {
@@ -150,6 +190,10 @@ export const router = createBrowserRouter([
         Component: RepairOrdersDashboard,
       },
       {
+        path: "repair-orders/outsourcing",
+        Component: RepairOutsourcing,
+      },
+      {
         path: "repair-orders/list",
         Component: RepairOrdersList,
       },
@@ -160,6 +204,10 @@ export const router = createBrowserRouter([
       {
         path: "repair-orders/:id",
         Component: RepairOrderView,
+      },
+      {
+        path: "repair-orders/:id/edit",
+        Component: RepairOrderEdit,
       },
     ],
   },

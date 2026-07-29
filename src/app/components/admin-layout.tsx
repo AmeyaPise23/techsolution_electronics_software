@@ -6,24 +6,18 @@ import {
   Settings,
   Menu,
   X,
-  ArrowLeft,
-  DollarSign,
-  TrendingUp,
   Receipt,
-  PieChart,
   Users,
   FileText,
-  Wallet,
   BarChart3,
-  ChevronDown,
   ChevronRight,
   Wrench,
   LogOut,
   User as UserIcon,
-  FolderTree,
   ClipboardList,
   ListOrdered,
-  Store,
+  CreditCard,
+  Box,
 } from "lucide-react";
 import { useState } from "react";
 import { Button } from "./ui/button";
@@ -47,18 +41,15 @@ interface NavItem {
 
 interface NavSection {
   label: string;
-  icon: LucideIcon;
   items: NavItem[];
 }
 
 const salesNav: NavSection = {
   label: "Sales",
-  icon: ShoppingCart,
   items: [
     { name: "Overview", href: "/admin/sales/overview", icon: BarChart3 },
     { name: "Clients", href: "/admin/clients", icon: Users },
     { name: "Products", href: "/admin/products", icon: Package },
-    { name: "Categories", href: "/admin/categories", icon: FolderTree },
     { name: "Quotations", href: "/admin/quotations", icon: ClipboardList },
     { name: "Invoices", href: "/admin/finance/invoices", icon: FileText },
     { name: "Orders", href: "/admin/orders", icon: ListOrdered },
@@ -67,25 +58,19 @@ const salesNav: NavSection = {
 
 const financeNav: NavSection = {
   label: "Finance",
-  icon: DollarSign,
   items: [
-    { name: "Overview", href: "/admin/finance/overview", icon: BarChart3 },
-    { name: "Revenue", href: "/admin/finance/revenue", icon: TrendingUp },
+    { name: "Payments", href: "/admin/finance/overview", icon: CreditCard },
     { name: "Expenses", href: "/admin/finance/expenses", icon: Receipt },
-    { name: "Profit", href: "/admin/finance/profit", icon: PieChart },
-    { name: "Outsourcing", href: "/admin/finance/outsourcing", icon: Users },
-    { name: "Cash Flow", href: "/admin/finance/cashflow", icon: Wallet },
     { name: "Reports", href: "/admin/finance/reports", icon: FileText },
   ],
 };
 
 const repairNav: NavSection = {
-  label: "Repair",
-  icon: Wrench,
+  label: "Operations",
   items: [
-    { name: "Dashboard", href: "/admin/repair-orders", icon: LayoutDashboard },
-    { name: "All Orders", href: "/admin/repair-orders/list", icon: ListOrdered },
-    { name: "New Order", href: "/admin/repair-orders/create", icon: ClipboardList },
+    { name: "Projects", href: "/admin/repair-orders", icon: ClipboardList },
+    { name: "Inventory", href: "/admin/categories", icon: Box },
+    { name: "Repair", href: "/admin/repair-orders/list", icon: Wrench },
   ],
 };
 
@@ -108,78 +93,22 @@ function NavLink({
     <Link
       to={to}
       className={`
-        group relative flex items-center gap-3 rounded-md px-3 py-2 text-[13px] font-medium
+        group relative flex items-center gap-3 rounded-lg px-3 py-2.5 text-[14px] font-semibold
         transition-all duration-200
         ${
           isActive
-            ? "bg-primary/10 text-primary"
-            : "text-muted-foreground hover:bg-muted/50 hover:text-foreground"
+            ? "bg-blue-100/80 text-[#0c367e] shadow-sm"
+            : "text-slate-600 hover:bg-blue-50/80 hover:text-slate-950"
         }
       `}
       onClick={onClick}
     >
       {isActive && (
-        <span className="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-[3px] rounded-full bg-primary" />
+        <span className="absolute left-0 top-1/2 h-6 w-[3px] -translate-y-1/2 rounded-full bg-blue-600" />
       )}
-      <Icon className={`size-4 shrink-0 transition-colors duration-200 ${isActive ? "text-primary" : "text-muted-foreground group-hover:text-foreground"}`} />
+      <Icon className={`size-4 shrink-0 transition-colors duration-200 ${isActive ? "text-blue-700" : "text-slate-500 group-hover:text-slate-900"}`} />
       <span>{label}</span>
     </Link>
-  );
-}
-
-function CollapsibleSection({
-  section,
-  isOpen,
-  onToggle,
-  pathname,
-  onNavigate,
-}: {
-  section: NavSection;
-  isOpen: boolean;
-  onToggle: () => void;
-  pathname: string;
-  onNavigate: () => void;
-}) {
-  const sectionActive = section.items.some(
-    (item) => pathname === item.href || pathname.startsWith(item.href + "/")
-  );
-
-  return (
-    <div className="space-y-1">
-      <button
-        onClick={onToggle}
-        className={`
-          group flex items-center justify-between w-full rounded-md px-3 py-2 text-[13px] font-medium
-          transition-all duration-200
-          ${sectionActive ? "text-foreground" : "text-muted-foreground hover:bg-muted/50 hover:text-foreground"}
-        `}
-      >
-        <div className="flex items-center gap-3">
-          <section.icon className={`size-4 shrink-0 transition-colors duration-200 ${sectionActive ? "text-foreground" : "text-muted-foreground group-hover:text-foreground"}`} />
-          <span>{section.label}</span>
-        </div>
-        <ChevronRight
-          className={`size-3.5 text-muted-foreground transition-transform duration-200 ${isOpen ? "rotate-90" : ""}`}
-        />
-      </button>
-
-      <div
-        className={`overflow-hidden transition-all duration-200 ${isOpen ? "max-h-96 opacity-100" : "max-h-0 opacity-0"}`}
-      >
-        <div className="ml-3 border-l border-border/60 pl-3 space-y-0.5 py-0.5">
-          {section.items.map((item) => (
-            <NavLink
-              key={item.href}
-              to={item.href}
-              icon={item.icon}
-              label={item.name}
-              isActive={pathname === item.href}
-              onClick={onNavigate}
-            />
-          ))}
-        </div>
-      </div>
-    </div>
   );
 }
 
@@ -188,11 +117,6 @@ export function AdminLayout() {
   const navigate = useNavigate();
   const { user, logout } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [openSections, setOpenSections] = useState<Record<string, boolean>>({
-    Sales: true,
-    Finance: false,
-    Repair: false,
-  });
 
   const handleLogout = () => {
     logout();
@@ -201,10 +125,6 @@ export function AdminLayout() {
 
   const getUserInitials = (username: string) => {
     return username.slice(0, 2).toUpperCase();
-  };
-
-  const toggleSection = (label: string) => {
-    setOpenSections((prev) => ({ ...prev, [label]: !prev[label] }));
   };
 
   return (
@@ -219,21 +139,21 @@ export function AdminLayout() {
       <aside
         className={`
           fixed inset-y-0 left-0 z-50 w-[260px] transform
-          bg-card/95 backdrop-blur-md border-r border-border/50
+          border-r border-blue-100 bg-[#F7FAFF] backdrop-blur-md
           transition-transform duration-300 ease-in-out lg:translate-x-0 lg:static
           ${sidebarOpen ? "translate-x-0" : "-translate-x-full"}
         `}
       >
         <div className="flex h-full flex-col">
           {/* Brand */}
-          <div className="flex h-16 items-center justify-between px-5 border-b border-border/50">
+          <div className="flex h-[76px] items-center justify-between px-5">
             <Link to="/admin" className="flex items-center gap-2.5">
-              <div className="size-8 rounded-lg bg-gradient-to-br from-primary to-primary/80 flex items-center justify-center shadow-sm">
-                <Store className="size-4 text-primary-foreground" />
+              <div className="flex size-9 items-center justify-center rounded-lg bg-gradient-to-br from-[#123f8d] to-[#0d2c63] shadow-sm">
+                <ShoppingCart className="size-5 text-white" />
               </div>
               <div className="flex flex-col">
-                <span className="text-sm font-semibold leading-tight">Admin Panel</span>
-                <span className="text-[10px] text-muted-foreground leading-tight">E-Commerce</span>
+                <span className="text-base font-bold leading-tight text-slate-950">{user?.companyName || "Dashboard"}</span>
+                <span className="text-xs font-medium leading-tight text-slate-500">ERP Suite</span>
               </div>
             </Link>
             <Button
@@ -247,10 +167,10 @@ export function AdminLayout() {
           </div>
 
           {/* Navigation */}
-          <nav className="flex-1 px-3 py-4 overflow-y-auto space-y-6 scrollbar-thin">
+          <nav className="flex-1 space-y-7 overflow-y-auto px-4 py-3 scrollbar-thin">
             {/* Dashboard — standalone */}
             <div className="space-y-1">
-              <p className="px-3 mb-2 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/70">
+              <p className="mb-2 px-3 text-[11px] font-bold uppercase tracking-normal text-slate-500">
                 Main
               </p>
               <NavLink
@@ -265,24 +185,48 @@ export function AdminLayout() {
             {/* Sections */}
             {sections.map((section) => (
               <div key={section.label} className="space-y-1">
-                <p className="px-3 mb-2 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/70">
+                <p className="mb-2 px-3 text-[11px] font-bold uppercase tracking-normal text-slate-500">
                   {section.label}
                 </p>
-                <CollapsibleSection
-                  section={section}
-                  isOpen={openSections[section.label] ?? false}
-                  onToggle={() => toggleSection(section.label)}
-                  pathname={location.pathname}
-                  onNavigate={() => setSidebarOpen(false)}
-                />
+                <div className="space-y-1">
+                  {section.items.map((item) => (
+                    <NavLink
+                      key={item.href}
+                      to={item.href}
+                      icon={item.icon}
+                      label={item.name}
+                      isActive={
+                        location.pathname === item.href ||
+                        (item.href !== "/admin" && location.pathname.startsWith(item.href + "/"))
+                      }
+                      onClick={() => setSidebarOpen(false)}
+                    />
+                  ))}
+                </div>
               </div>
             ))}
 
             {/* Utilities */}
             <div className="space-y-1">
-              <p className="px-3 mb-2 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/70">
+              <p className="mb-2 px-3 text-[11px] font-bold uppercase tracking-normal text-slate-500">
                 System
               </p>
+              {user?.role === "ROLE_ADMIN" && (
+                <NavLink
+                  to="/admin/users"
+                  icon={Users}
+                  label="Team"
+                  isActive={location.pathname.startsWith("/admin/users")}
+                  onClick={() => setSidebarOpen(false)}
+                />
+              )}
+              <NavLink
+                to="/admin/company-settings"
+                icon={Settings}
+                label="Company"
+                isActive={location.pathname === "/admin/company-settings"}
+                onClick={() => setSidebarOpen(false)}
+              />
               <NavLink
                 to="/admin/settings"
                 icon={Settings}
@@ -290,35 +234,28 @@ export function AdminLayout() {
                 isActive={location.pathname === "/admin/settings"}
                 onClick={() => setSidebarOpen(false)}
               />
-              <NavLink
-                to="/products"
-                icon={ArrowLeft}
-                label="Back to Store"
-                isActive={false}
-                onClick={() => setSidebarOpen(false)}
-              />
             </div>
           </nav>
 
           {/* User */}
-          <div className="border-t border-border/50 p-3">
+          <div className="p-4">
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <button className="flex items-center gap-3 w-full rounded-lg p-2.5 hover:bg-muted/50 transition-colors duration-200">
-                  <div className="size-9 rounded-full bg-gradient-to-br from-primary/20 to-primary/5 flex items-center justify-center ring-1 ring-primary/10">
-                    <span className="text-xs font-semibold text-primary">
+                <button className="flex w-full items-center gap-3 rounded-lg border border-blue-100 bg-white p-3 shadow-sm transition-colors duration-200 hover:bg-blue-50/70">
+                  <div className="flex size-10 items-center justify-center rounded-full bg-blue-100">
+                    <span className="text-sm font-bold text-blue-800">
                       {user ? getUserInitials(user.username) : "AD"}
                     </span>
                   </div>
                   <div className="flex-1 min-w-0 text-left">
-                    <p className="text-[13px] font-medium truncate">
-                      {user?.username || "Admin User"}
+                    <p className="truncate text-sm font-bold text-slate-950">
+                      {user?.username || "TechSolution Pvt Ltd"}
                     </p>
-                    <p className="text-[11px] text-muted-foreground truncate">
-                      {user?.role || "ADMIN"}
+                    <p className="truncate text-xs font-medium text-slate-500">
+                      {user?.role || "Ameya Pise"}
                     </p>
                   </div>
-                  <ChevronDown className="size-3.5 text-muted-foreground" />
+                  <ChevronRight className="size-4 text-slate-500" />
                 </button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-56">
@@ -341,7 +278,7 @@ export function AdminLayout() {
 
       {/* Main content */}
       <div className="flex flex-1 flex-col overflow-hidden">
-        <header className="flex h-14 items-center gap-4 border-b border-border/50 bg-card/50 backdrop-blur-sm px-4 lg:hidden">
+        <header className="flex h-14 items-center gap-4 border-b border-blue-100 bg-white/80 px-4 backdrop-blur-sm lg:hidden">
           <Button
             variant="ghost"
             size="icon"
@@ -350,7 +287,7 @@ export function AdminLayout() {
           >
             <Menu className="size-4" />
           </Button>
-          <span className="text-sm font-semibold">Admin Panel</span>
+          <span className="text-sm font-semibold">TechSolution</span>
         </header>
 
         <main className="flex-1 overflow-y-auto">
