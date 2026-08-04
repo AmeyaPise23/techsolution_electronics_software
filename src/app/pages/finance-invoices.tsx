@@ -28,12 +28,6 @@ import {
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "../components/ui/dropdown-menu";
-import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -414,6 +408,7 @@ export function FinanceInvoices() {
   const [shareEmail, setShareEmail] = useState("");
   const [shareNote, setShareNote] = useState("");
 
+  const [actionMenuId, setActionMenuId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [periodFilter, setPeriodFilter] = useState<string>("this-month");
@@ -858,7 +853,7 @@ export function FinanceInvoices() {
                             </button>
                           )}
                         </TableCell>
-                        <TableCell className="px-5 py-3 text-right">
+                        <TableCell className="relative px-5 py-3 text-right">
                           <div className="flex items-center justify-end gap-1">
                             <Button
                               variant="ghost"
@@ -910,34 +905,60 @@ export function FinanceInvoices() {
                             >
                               <Share2 className="size-4" />
                             </Button>
-                            <DropdownMenu>
-                              <DropdownMenuTrigger asChild>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="size-8 rounded-full text-slate-600 hover:bg-slate-100"
-                                  onPointerDown={(e) => e.stopPropagation()}
-                                  onClick={(e) => e.stopPropagation()}
-                                >
-                                  <MoreHorizontal className="size-4" />
-                                </Button>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent align="end" onPointerDown={(e) => e.stopPropagation()} onClick={(e) => e.stopPropagation()}>
-                                {invoice.status === "draft" && (
-                                  <DropdownMenuItem onClick={() => handleGenerate(invoice)}>
-                                    <Send className="size-4 mr-2 text-blue-600" />
-                                    Save
-                                  </DropdownMenuItem>
-                                )}
-                                <DropdownMenuItem
-                                  className="text-rose-600 focus:text-rose-600"
-                                  onClick={() => handleDelete(invoice.id, invoice.invoiceNumber)}
-                                >
-                                  <Trash2 className="size-4 mr-2" />
-                                  Delete
-                                </DropdownMenuItem>
-                              </DropdownMenuContent>
-                            </DropdownMenu>
+                            <div className="relative">
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="size-8 rounded-full text-slate-600 hover:bg-slate-100"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setActionMenuId((current) => (current === invoice.id ? null : invoice.id));
+                                }}
+                                title="More actions"
+                              >
+                                <MoreHorizontal className="size-4" />
+                              </Button>
+                              {actionMenuId === invoice.id && (
+                                <>
+                                  <div
+                                    className="fixed inset-0 z-40"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setActionMenuId(null);
+                                    }}
+                                  />
+                                  <div
+                                    className="absolute right-0 top-full z-50 mt-1 w-44 rounded-md border border-slate-200 bg-white p-1 shadow-lg"
+                                    onClick={(e) => e.stopPropagation()}
+                                  >
+                                    {invoice.status === "draft" && (
+                                      <button
+                                        type="button"
+                                        className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm font-medium text-slate-700 hover:bg-blue-50 hover:text-blue-700"
+                                        onClick={() => {
+                                          setActionMenuId(null);
+                                          handleGenerate(invoice);
+                                        }}
+                                      >
+                                        <Send className="size-4 text-blue-600" />
+                                        Save
+                                      </button>
+                                    )}
+                                    <button
+                                      type="button"
+                                      className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm font-medium text-rose-600 hover:bg-rose-50"
+                                      onClick={() => {
+                                        setActionMenuId(null);
+                                        handleDelete(invoice.id, invoice.invoiceNumber);
+                                      }}
+                                    >
+                                      <Trash2 className="size-4" />
+                                      Delete
+                                    </button>
+                                  </div>
+                                </>
+                              )}
+                            </div>
                           </div>
                         </TableCell>
                       </TableRow>

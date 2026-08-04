@@ -10,16 +10,21 @@ import {
   Users,
   FileText,
   BarChart3,
+  ChevronDown,
   ChevronRight,
-  Wrench,
   LogOut,
   User as UserIcon,
   ClipboardList,
   ListOrdered,
   CreditCard,
   Box,
+  Mail,
+  LayoutGrid,
+  Folder,
+  Flag,
+  Plus,
 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "./ui/button";
 import {
   DropdownMenu,
@@ -33,10 +38,20 @@ import { useAuth } from "../context/AuthContext";
 import { useNavigate } from "react-router";
 import type { LucideIcon } from "lucide-react";
 
-interface NavItem {
+interface NavChild {
   name: string;
   href: string;
+  // Match on href (pathname); if `viewParam` is set the item is active only
+  // when the URL's ?view matches this value ("all" = no view param needed).
+  viewParam?: string;
+}
+
+interface NavItem {
+  name: string;
+  href?: string;
   icon: LucideIcon;
+  children?: NavChild[];
+  exact?: boolean;
 }
 
 interface NavSection {
@@ -50,6 +65,7 @@ const salesNav: NavSection = {
     { name: "Overview", href: "/admin/sales/overview", icon: BarChart3 },
     { name: "Clients", href: "/admin/clients", icon: Users },
     { name: "Products", href: "/admin/products", icon: Package },
+    { name: "Inventory", href: "/admin/categories", icon: Box },
     { name: "Quotations", href: "/admin/quotations", icon: ClipboardList },
     { name: "Invoices", href: "/admin/finance/invoices", icon: FileText },
     { name: "Orders", href: "/admin/orders", icon: ListOrdered },
@@ -66,15 +82,37 @@ const financeNav: NavSection = {
 };
 
 const repairNav: NavSection = {
-  label: "Operations",
+  label: "Repair Service",
   items: [
-    { name: "Projects", href: "/admin/repair-orders", icon: ClipboardList },
-    { name: "Inventory", href: "/admin/categories", icon: Box },
-    { name: "Repair", href: "/admin/repair-orders/list", icon: Wrench },
+    { name: "Dashboard", href: "/admin/repair-orders", icon: LayoutDashboard, exact: true },
+    {
+      name: "Repair Orders",
+      icon: ClipboardList,
+      children: [
+        { name: "All Orders", href: "/admin/repair-orders/list", viewParam: "all" },
+        { name: "Pending", href: "/admin/repair-orders/list", viewParam: "pending" },
+        { name: "Ongoing", href: "/admin/repair-orders/list", viewParam: "ongoing" },
+        { name: "Completed", href: "/admin/repair-orders/list", viewParam: "completed" },
+        { name: "Cancelled", href: "/admin/repair-orders/list", viewParam: "cancelled" },
+      ],
+    },
+    { name: "New Repair Order", href: "/admin/repair-orders/create", icon: Plus },
+    { name: "Reports", href: "/admin/finance/reports", icon: BarChart3 },
+    { name: "Settings", href: "/admin/settings", icon: Settings },
   ],
 };
 
-const sections: NavSection[] = [salesNav, financeNav, repairNav];
+const workDoneNav: NavSection = {
+  label: "Work Management",
+  items: [
+    { name: "Projects", href: "/admin/work-done/projects", icon: Folder },
+    { name: "My Dashboard", href: "/admin/work-done/dashboard", icon: LayoutGrid },
+    { name: "Personal", href: "/admin/work-done/personal", icon: UserIcon },
+    { name: "Leaderboard", href: "/admin/work-done/leaderboard", icon: Flag },
+  ],
+};
+
+const sections: NavSection[] = [salesNav, financeNav, repairNav, workDoneNav];
 
 function NavLink({
   to,
@@ -112,11 +150,99 @@ function NavLink({
   );
 }
 
+function NavGroup({
+  icon: Icon,
+  label,
+  children,
+  currentPath,
+  currentView,
+  onNavigate,
+}: {
+  icon: LucideIcon;
+  label: string;
+  children: NavChild[];
+  currentPath: string;
+  currentView: string;
+  onNavigate: () => void;
+}) {
+  const isChildActive = (c: NavChild) =>
+    currentPath === c.href &&
+    (c.viewParam === undefined || currentView === c.viewParam);
+
+  const anyActive = children.some(isChildActive);
+  const [open, setOpen] = useState(anyActive);
+
+  useEffect(() => {
+    if (anyActive) setOpen(true);
+  }, [anyActive]);
+
+  return (
+    <div>
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className={`
+          group flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-[14px] font-semibold
+          transition-all duration-200
+          ${
+            anyActive
+              ? "text-[#0c367e]"
+              : "text-slate-600 hover:bg-blue-50/80 hover:text-slate-950"
+          }
+        `}
+      >
+        <Icon className={`size-4 shrink-0 ${anyActive ? "text-blue-700" : "text-slate-500 group-hover:text-slate-900"}`} />
+        <span className="flex-1 text-left">{label}</span>
+        <ChevronDown
+          className={`size-4 shrink-0 text-slate-400 transition-transform duration-200 ${open ? "rotate-0" : "-rotate-90"}`}
+        />
+      </button>
+      {open && (
+        <div className="mt-1 space-y-0.5 pl-6">
+          {children.map((c) => {
+            const active = isChildActive(c);
+            const to =
+              c.viewParam && c.viewParam !== "all"
+                ? `${c.href}?view=${c.viewParam}`
+                : c.href;
+            return (
+              <Link
+                key={`${c.href}?${c.viewParam ?? ""}`}
+                to={to}
+                onClick={onNavigate}
+                className={`
+                  relative flex items-center gap-2 rounded-md px-3 py-2 text-[13px] font-medium
+                  transition-colors duration-200
+                  ${
+                    active
+                      ? "bg-blue-100/80 text-[#0c367e]"
+                      : "text-slate-600 hover:bg-blue-50/80 hover:text-slate-950"
+                  }
+                `}
+              >
+                {active && (
+                  <span className="absolute left-0 top-1/2 h-4 w-[2px] -translate-y-1/2 rounded-full bg-blue-600" />
+                )}
+                <span
+                  className={`size-1.5 rounded-full ${active ? "bg-blue-600" : "bg-slate-300"}`}
+                />
+                {c.name}
+              </Link>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function AdminLayout() {
   const location = useLocation();
   const navigate = useNavigate();
   const { user, logout } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const currentView =
+    new URLSearchParams(location.search).get("view") || "all";
 
   const handleLogout = () => {
     logout();
@@ -189,19 +315,35 @@ export function AdminLayout() {
                   {section.label}
                 </p>
                 <div className="space-y-1">
-                  {section.items.map((item) => (
-                    <NavLink
-                      key={item.href}
-                      to={item.href}
-                      icon={item.icon}
-                      label={item.name}
-                      isActive={
-                        location.pathname === item.href ||
-                        (item.href !== "/admin" && location.pathname.startsWith(item.href + "/"))
-                      }
-                      onClick={() => setSidebarOpen(false)}
-                    />
-                  ))}
+                  {section.items.map((item) => {
+                    if (item.children) {
+                      return (
+                        <NavGroup
+                          key={item.name}
+                          icon={item.icon}
+                          label={item.name}
+                          children={item.children}
+                          currentPath={location.pathname}
+                          currentView={currentView}
+                          onNavigate={() => setSidebarOpen(false)}
+                        />
+                      );
+                    }
+                    const href = item.href!;
+                    return (
+                      <NavLink
+                        key={href}
+                        to={href}
+                        icon={item.icon}
+                        label={item.name}
+                        isActive={
+                          location.pathname === href ||
+                          (!item.exact && href !== "/admin" && location.pathname.startsWith(href + "/"))
+                        }
+                        onClick={() => setSidebarOpen(false)}
+                      />
+                    );
+                  })}
                 </div>
               </div>
             ))}
@@ -227,6 +369,15 @@ export function AdminLayout() {
                 isActive={location.pathname === "/admin/company-settings"}
                 onClick={() => setSidebarOpen(false)}
               />
+              {user?.role === "ROLE_ADMIN" && (
+                <NavLink
+                  to="/admin/email-settings"
+                  icon={Mail}
+                  label="Email"
+                  isActive={location.pathname === "/admin/email-settings"}
+                  onClick={() => setSidebarOpen(false)}
+                />
+              )}
               <NavLink
                 to="/admin/settings"
                 icon={Settings}

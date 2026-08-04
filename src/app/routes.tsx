@@ -33,11 +33,25 @@ import { AdminCategories } from "./pages/admin-categories";
 import { AdminLogin } from "./pages/admin-login";
 import { AdminUsers } from "./pages/admin-users";
 import { AdminCompanySettings } from "./pages/admin-company-settings";
+import { AdminEmailSettings } from "./pages/admin-email-settings";
 import { CompanyRegister } from "./pages/company-register";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 import { Cart } from "./pages/cart";
 import { Checkout } from "./pages/checkout";
 import { QuotationConfirmation } from "./pages/quotation-confirmation";
+// Legacy day-scheduler pages (work-done-*) stay in the repo but are unlinked
+// from the router; the Work Management module below replaces them.
+import { WorkDoneLayout } from "./features/work-done/screens/WorkDoneLayout";
+import { ProjectShell } from "./features/work-done/screens/ProjectShell";
+import { ProjectsListPage } from "./features/work-done/screens/ProjectsListPage";
+import { ProjectOverviewPage } from "./features/work-done/screens/ProjectOverviewPage";
+import { KanbanBoardPage } from "./features/work-done/screens/KanbanBoardPage";
+import { MilestoneTimelinePage } from "./features/work-done/screens/MilestoneTimelinePage";
+import { BacklogBoardPage } from "./features/work-done/screens/BacklogBoardPage";
+import { TeamCalendarPage } from "./features/work-done/screens/TeamCalendarPage";
+import { LeaderboardPage } from "./features/work-done/screens/LeaderboardPage";
+import { EmployeeDashboardPage } from "./features/work-done/screens/EmployeeDashboardPage";
+import { PersonalTasksPage } from "./features/work-done/screens/PersonalTasksPage";
 
 export const router = createBrowserRouter([
   {
@@ -135,6 +149,10 @@ export const router = createBrowserRouter([
         Component: AdminCompanySettings,
       },
       {
+        path: "email-settings",
+        Component: AdminEmailSettings,
+      },
+      {
         path: "settings",
         Component: AdminSettings,
       },
@@ -208,6 +226,29 @@ export const router = createBrowserRouter([
       {
         path: "repair-orders/:id/edit",
         Component: RepairOrderEdit,
+      },
+      {
+        path: "work-done",
+        Component: WorkDoneLayout,
+        children: [
+          { index: true, element: <Navigate to="projects" replace /> },
+          { path: "projects", Component: ProjectsListPage },
+          {
+            path: "projects/:projectId",
+            Component: ProjectShell,
+            children: [
+              { index: true, element: <Navigate to="overview" replace /> },
+              { path: "overview", Component: ProjectOverviewPage },
+              { path: "timeline", Component: MilestoneTimelinePage },
+              { path: "board", Component: KanbanBoardPage },
+              { path: "backlog", Component: BacklogBoardPage },
+              { path: "calendar", Component: TeamCalendarPage },
+            ],
+          },
+          { path: "dashboard", Component: EmployeeDashboardPage },
+          { path: "personal", Component: PersonalTasksPage },
+          { path: "leaderboard", Component: LeaderboardPage },
+        ],
       },
     ],
   },

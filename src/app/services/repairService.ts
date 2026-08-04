@@ -17,6 +17,18 @@ export type RepairStatusApi =
 
 export type RepairPriorityApi = "low" | "normal" | "high" | "urgent";
 
+/**
+ * Server-defined bucket over RepairStatus. Kept in sync with
+ * backend `com.ecommerce.auth.entity.RepairStatusGroup`.
+ * "all" means "no status filter".
+ */
+export type RepairStatusGroupApi =
+  | "all"
+  | "pending"
+  | "ongoing"
+  | "completed"
+  | "cancelled";
+
 export type WarrantyStatusApi =
   | "in_warranty"
   | "out_of_warranty"
@@ -287,6 +299,7 @@ export interface RepairOrderDetail {
 export interface RepairSearchParams {
   q?: string;
   status?: RepairStatusApi;
+  statusGroup?: RepairStatusGroupApi;
   priority?: RepairPriorityApi;
   customerId?: number;
   machineCategoryId?: number;
@@ -295,6 +308,7 @@ export interface RepairSearchParams {
   deviceModelNumber?: string;
   productId?: string;
   owningCompany?: string;
+  outsourceStatus?: OutsourceStatusApi;
   receivedFrom?: string;
   receivedTo?: string;
   page?: number;

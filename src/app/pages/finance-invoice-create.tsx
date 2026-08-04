@@ -504,13 +504,16 @@ export function FinanceInvoiceCreate() {
         toast.error("Please fill in all required customer fields");
         return;
       }
-      if (items.length === 0 || items[0].productName === "") {
-        toast.error("Please add at least one invoice item");
+      // Drop blank placeholder rows — a labour/charges-only invoice is valid.
+      const filledItems = items.filter((it) => it.productName.trim() !== "");
+      if (filledItems.length === 0 && additionalCharges <= 0) {
+        toast.error(
+          "Add at least one product or enter additional charges (e.g. labour)"
+        );
         return;
       }
-      const invalidItemIndex = items.findIndex(
+      const invalidItemIndex = filledItems.findIndex(
         (item) =>
-          !item.productName ||
           item.quantity <= 0 ||
           item.unitPrice <= 0 ||
           item.discount < 0 ||
@@ -558,7 +561,7 @@ export function FinanceInvoiceCreate() {
         bankIfsc: payment.ifscCode,
         bankBranch: payment.branch,
         bankUpi: payment.upiId,
-        items,
+        items: filledItems,
         notes,
         termsAndConditions,
         subtotal: totals.subtotal,
