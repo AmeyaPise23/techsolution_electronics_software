@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Repair location">
+  <!-- Pin body -->
+  <path
+    fill="#0f172a"
+    d="M256 16C162.4 16 86 92.4 86 186c0 34.3 13.9 68.9 34.7 101.9 20.8 33 48.4 63.9 74 89.6 25.7 25.7 49.3 46.2 61.3 56.3 12-10.1 35.6-30.6 61.3-56.3 25.6-25.7 53.2-56.6 74-89.6C412.1 254.9 426 220.3 426 186 426 92.4 349.6 16 256 16z"
+  />
+  <!-- White disc -->
+  <circle cx="256" cy="186" r="106" fill="#fff" />
+
+  <!-- Wrench: ring lower-left, open jaw upper-right -->
+  <g transform="translate(256 186) rotate(-45)" fill="#0f172a">
+    <rect x="-41" y="-10" width="60" height="20" />
+    <path d="M76.5 -22.1A33 33 0 1 0 76.5 22.1L64.6 11.4A17 17 0 1 1 64.6 -11.4Z" />
+    <circle cx="-62" cy="0" r="15.5" fill="none" stroke="#0f172a" stroke-width="11" />
+  </g>
+
+  <!-- Screwdriver: tip upper-left, handle lower-right -->
+  <g transform="translate(256 186) rotate(45)" fill="#0f172a">
+    <rect x="-88" y="-9" width="20" height="18" rx="1" />
+    <rect x="-70" y="-5" width="52" height="10" />
+    <rect x="-18" y="-13" width="11" height="26" rx="2" />
+    <rect x="-7" y="-18" width="76" height="36" rx="8" />
+    <g fill="#fff">
+      <rect x="14" y="-18" width="5" height="36" />
+      <rect x="34" y="-18" width="5" height="36" />
+      <rect x="54" y="-18" width="5" height="36" />
+    </g>
+  </g>
+</svg>

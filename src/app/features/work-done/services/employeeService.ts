@@ -1,18 +1,37 @@
 import { Employee, ID, Role } from "../types";
-import { simulateLatency } from "../mock/latency";
-import { snapshot } from "../mock/store";
+import { wmGet, s } from "./api";
+
+interface BackendEmployee {
+  id: number;
+  tenantId: number | null;
+  displayName: string;
+  email: string;
+  role: string | null;
+  avatarUrl: string | null;
+}
+
+function toEmployee(b: BackendEmployee): Employee {
+  return {
+    id: s(b.id),
+    tenantId: s(b.tenantId),
+    displayName: b.displayName,
+    email: b.email,
+    role: (b.role as Role) ?? Role.Employee,
+    avatarUrl: b.avatarUrl ?? undefined,
+  };
+}
 
 export async function listEmployees(): Promise<Employee[]> {
-  await simulateLatency();
-  return snapshot().employees;
+  const raw = await wmGet<BackendEmployee[]>("/employees");
+  return raw.map(toEmployee);
 }
 
 export async function getEmployee(id: ID): Promise<Employee | null> {
-  await simulateLatency();
-  return snapshot().employees.find((e) => e.id === id) ?? null;
+  const all = await listEmployees();
+  return all.find((e) => e.id === id) ?? null;
 }
 
 export async function listEmployeesByRole(role: Role): Promise<Employee[]> {
-  await simulateLatency();
-  return snapshot().employees.filter((e) => e.role === role);
+  const all = await listEmployees();
+  return all.filter((e) => e.role === role);
 }

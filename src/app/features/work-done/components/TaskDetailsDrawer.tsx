@@ -390,7 +390,7 @@ function ChecklistTab({ taskId }: { taskId: string }) {
         <label key={i.id} className="flex items-start gap-2 rounded-md border border-slate-100 bg-white p-2">
           <Checkbox
             checked={i.isChecked}
-            onCheckedChange={() => toggleChecklistItem(i.id, actor.id)}
+            onCheckedChange={() => toggleChecklistItem(i.id, actor.id, taskId)}
             className="mt-0.5"
           />
           <span className={`text-sm ${i.isChecked ? "text-slate-400 line-through" : "text-slate-700"}`}>

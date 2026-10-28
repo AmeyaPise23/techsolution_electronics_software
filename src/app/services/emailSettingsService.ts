@@ -1,6 +1,6 @@
 import { authService } from "./authService";
 
-const API_BASE_URL = "http://localhost:8080/api";
+import { API_BASE_URL } from "../config";
 
 export interface EmailSettings {
   id: number | null;
@@ -36,7 +36,7 @@ export interface EmailProvider {
 export const EMAIL_PROVIDERS: EmailProvider[] = [
   { value: "GODADDY", label: "GoDaddy", host: "smtpout.secureserver.net", port: 587, tls: true },
   { value: "HOSTINGER", label: "Hostinger", host: "smtp.hostinger.com", port: 587, tls: true },
-  { value: "GMAIL", label: "Gmail", host: "smtp.gmail.com", port: 587, tls: true, hint: "Use an App Password, not your Gmail password" },
+  { value: "GMAIL", label: "Gmail", host: "smtp.gmail.com", port: 587, tls: true, hint: "Use your full Gmail address and a 16-character Google App Password (not your regular password). App Passwords require 2-Step Verification. Spaces in the copied password are ignored." },
   { value: "OUTLOOK", label: "Outlook / Office 365", host: "smtp.office365.com", port: 587, tls: true },
   { value: "ZOHO", label: "Zoho Mail", host: "smtp.zoho.in", port: 587, tls: true },
   { value: "YAHOO", label: "Yahoo Mail", host: "smtp.mail.yahoo.com", port: 587, tls: true, hint: "Use an App Password" },

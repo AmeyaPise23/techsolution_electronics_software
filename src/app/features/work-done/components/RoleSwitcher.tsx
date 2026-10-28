@@ -1,11 +1,7 @@
-// Dev-only role switcher pinned to the top of module pages. Lets a single
-// signed-in account preview Manager / HR / Employee views while wiring up
-// permission gates before real role assignments exist. Uses sessionStorage
-// (not localStorage) so it resets per tab.
-
+import { useEffect, useState } from "react";
 import { useCurrentActor, setDevOverride, clearDevOverride } from "../hooks/useCurrentActor";
-import { snapshot } from "../mock/store";
-import { Role } from "../types";
+import { listEmployees } from "../services/employeeService";
+import { Employee, Role } from "../types";
 import { Button } from "../../../components/ui/button";
 import { Badge } from "../../../components/ui/badge";
 import {
@@ -24,7 +20,11 @@ const ROLE_LABEL: Record<Role, string> = {
 
 export function RoleSwitcher() {
   const actor = useCurrentActor();
-  const employees = snapshot().employees;
+  const [employees, setEmployees] = useState<Employee[]>([]);
+
+  useEffect(() => {
+    listEmployees().then(setEmployees).catch(() => {});
+  }, []);
 
   return (
     <div className="flex items-center gap-2 rounded-lg border border-dashed border-amber-400 bg-amber-50 px-3 py-2 text-xs">
@@ -35,7 +35,7 @@ export function RoleSwitcher() {
         onValueChange={(v) => {
           const nextRole = v as Role;
           const nextEmp = employees.find((e) => e.role === nextRole) ?? employees[0];
-          setDevOverride(nextRole, nextEmp.id);
+          if (nextEmp) setDevOverride(nextRole, nextEmp.id);
         }}
       >
         <SelectTrigger className="h-7 w-32 text-xs">

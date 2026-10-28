@@ -1,13 +1,43 @@
 import {
-  HistoryEventType,
   ID,
   Milestone,
   MilestoneProgress,
   MilestoneStatus,
-  TaskStatus,
 } from "../types";
-import { simulateLatency } from "../mock/latency";
-import { snapshot, useWorkStore } from "../mock/store";
+import { wmGet, wmPatch, wmPost, s } from "./api";
+
+interface BackendMilestone {
+  id: number;
+  projectId: number;
+  name: string;
+  description: string | null;
+  status: string;
+  plannedStartDate: string | null;
+  plannedEndDate: string | null;
+  actualStartDate: string | null;
+  actualEndDate: string | null;
+  orderIndex: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+function toMilestone(b: BackendMilestone): Milestone {
+  return {
+    id: s(b.id),
+    tenantId: "",
+    projectId: s(b.projectId),
+    name: b.name,
+    description: b.description ?? undefined,
+    status: b.status as MilestoneStatus,
+    plannedStartDate: b.plannedStartDate ?? undefined,
+    plannedEndDate: b.plannedEndDate ?? undefined,
+    actualStartDate: b.actualStartDate ?? undefined,
+    actualEndDate: b.actualEndDate ?? undefined,
+    orderIndex: b.orderIndex,
+    createdAt: b.createdAt,
+    updatedAt: b.updatedAt,
+  };
+}
 
 export interface MilestoneFilters {
   projectId?: ID;
@@ -15,32 +45,37 @@ export interface MilestoneFilters {
 }
 
 export async function listMilestones(filters: MilestoneFilters = {}): Promise<Milestone[]> {
-  await simulateLatency();
-  return snapshot()
-    .milestones.filter((m) => {
-      if (filters.projectId && m.projectId !== filters.projectId) return false;
-      if (filters.status && m.status !== filters.status) return false;
-      return true;
-    })
-    .sort((a, b) => a.orderIndex - b.orderIndex);
+  const params = new URLSearchParams();
+  if (filters.projectId) params.set("projectId", filters.projectId);
+  const qs = params.toString();
+  const raw = await wmGet<BackendMilestone[]>(`/milestones${qs ? `?${qs}` : ""}`);
+  let result = raw.map(toMilestone);
+  if (filters.status) result = result.filter((m) => m.status === filters.status);
+  return result.sort((a, b) => a.orderIndex - b.orderIndex);
 }
 
 export async function getMilestone(id: ID): Promise<Milestone | null> {
-  await simulateLatency();
-  return snapshot().milestones.find((m) => m.id === id) ?? null;
+  try {
+    const raw = await wmGet<BackendMilestone>(`/milestones/${id}`);
+    return toMilestone(raw);
+  } catch {
+    return null;
+  }
 }
 
 export async function getMilestoneProgress(id: ID): Promise<MilestoneProgress> {
-  await simulateLatency();
-  const state = snapshot();
-  const tasks = state.tasks.filter((t) => t.milestoneId === id);
-  const totalTasks = tasks.length;
-  const completedTasks = tasks.filter((t) => t.status === TaskStatus.Done).length;
+  const raw = await wmGet<{
+    milestoneId: number;
+    totalTasks: number;
+    doneTasks: number;
+    remainingTasks: number;
+    percentComplete: number;
+  }>(`/milestones/${id}/progress`);
   return {
-    milestoneId: id,
-    totalTasks,
-    completedTasks,
-    percentComplete: totalTasks === 0 ? 0 : Math.round((completedTasks / totalTasks) * 100),
+    milestoneId: s(raw.milestoneId),
+    totalTasks: raw.totalTasks,
+    completedTasks: raw.doneTasks,
+    percentComplete: raw.percentComplete,
   };
 }
 
@@ -53,115 +88,23 @@ export interface CreateMilestoneInput {
   orderIndex?: number;
 }
 
-export async function createMilestone(input: CreateMilestoneInput, actorId: ID): Promise<Milestone> {
-  const now = new Date().toISOString();
-  const state = snapshot();
-  const orderIndex =
-    input.orderIndex ??
-    Math.max(0, ...state.milestones.filter((m) => m.projectId === input.projectId).map((m) => m.orderIndex)) + 1;
-  const milestone: Milestone = {
-    id: `ms-${Date.now()}`,
-    tenantId: "tenant-demo",
-    projectId: input.projectId,
+export async function createMilestone(input: CreateMilestoneInput, _actorId: ID): Promise<Milestone> {
+  const raw = await wmPost<BackendMilestone>("/milestones", {
+    projectId: Number(input.projectId),
     name: input.name,
     description: input.description,
-    status: MilestoneStatus.Planned,
     plannedStartDate: input.plannedStartDate,
     plannedEndDate: input.plannedEndDate,
-    orderIndex,
-    createdAt: now,
-    updatedAt: now,
-  };
-  useWorkStore.getState().patch((draft) => {
-    draft.milestones.push(milestone);
-    draft.history.push({
-      id: `hst-${Date.now()}`,
-      tenantId: "tenant-demo",
-      eventType: HistoryEventType.MilestoneCreated,
-      actorId,
-      occurredAt: now,
-      projectId: input.projectId,
-      milestoneId: milestone.id,
-      message: `Milestone ${milestone.name} created`,
-    });
   });
-  await simulateLatency();
-  return milestone;
+  return toMilestone(raw);
 }
 
-export async function startMilestone(id: ID, actorId: ID): Promise<Milestone> {
-  const now = new Date().toISOString();
-  let updated: Milestone | null = null;
-  useWorkStore.getState().patch((draft) => {
-    const idx = draft.milestones.findIndex((m) => m.id === id);
-    if (idx === -1) return;
-    draft.milestones[idx] = {
-      ...draft.milestones[idx],
-      status: MilestoneStatus.Ongoing,
-      actualStartDate: now.slice(0, 10),
-      updatedAt: now,
-    };
-    updated = draft.milestones[idx];
-    draft.history.push({
-      id: `hst-${Date.now()}`,
-      tenantId: "tenant-demo",
-      eventType: HistoryEventType.MilestoneStarted,
-      actorId,
-      occurredAt: now,
-      projectId: updated.projectId,
-      milestoneId: id,
-      message: `Milestone ${updated.name} started`,
-    });
-  });
-  if (!updated) throw new Error(`Milestone ${id} not found`);
-  await simulateLatency();
-  return updated;
+export async function startMilestone(id: ID, _actorId: ID): Promise<Milestone> {
+  const raw = await wmPatch<BackendMilestone>(`/milestones/${id}/start`);
+  return toMilestone(raw);
 }
 
-// Completing a milestone auto-moves unfinished tasks to the backlog and emits
-// history for each moved task, matching the Phase B spec (B3).
-export async function completeMilestone(id: ID, actorId: ID): Promise<Milestone> {
-  const now = new Date().toISOString();
-  let updated: Milestone | null = null;
-  useWorkStore.getState().patch((draft) => {
-    const idx = draft.milestones.findIndex((m) => m.id === id);
-    if (idx === -1) return;
-    draft.milestones[idx] = {
-      ...draft.milestones[idx],
-      status: MilestoneStatus.Completed,
-      actualEndDate: now.slice(0, 10),
-      updatedAt: now,
-    };
-    updated = draft.milestones[idx];
-    // Auto-move unfinished tasks to backlog.
-    for (let i = 0; i < draft.tasks.length; i++) {
-      const t = draft.tasks[i];
-      if (t.milestoneId === id && t.status !== TaskStatus.Done) {
-        draft.tasks[i] = { ...t, milestoneId: null, status: TaskStatus.Backlog, updatedAt: now };
-        draft.history.push({
-          id: `hst-${Date.now()}-${i}`,
-          tenantId: "tenant-demo",
-          eventType: HistoryEventType.TaskMovedToBacklog,
-          actorId,
-          occurredAt: now,
-          projectId: t.projectId,
-          taskId: t.id,
-          message: `Auto-moved to backlog on milestone completion`,
-        });
-      }
-    }
-    draft.history.push({
-      id: `hst-${Date.now()}`,
-      tenantId: "tenant-demo",
-      eventType: HistoryEventType.MilestoneCompleted,
-      actorId,
-      occurredAt: now,
-      projectId: updated.projectId,
-      milestoneId: id,
-      message: `Milestone ${updated.name} completed`,
-    });
-  });
-  if (!updated) throw new Error(`Milestone ${id} not found`);
-  await simulateLatency();
-  return updated;
+export async function completeMilestone(id: ID, _actorId: ID): Promise<Milestone> {
+  const raw = await wmPatch<BackendMilestone>(`/milestones/${id}/complete`);
+  return toMilestone(raw);
 }

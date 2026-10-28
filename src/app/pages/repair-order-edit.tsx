@@ -101,6 +101,38 @@ const fmtMoney = (v?: number) =>
     maximumFractionDigits: 2,
   }).format(v ?? 0);
 
+const fmtDate = (v?: string) =>
+  v
+    ? new Date(v).toLocaleDateString(undefined, {
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+      })
+    : "-";
+
+/**
+ * When the order entered its current status. Falls back to the order's own
+ * updatedAt when no status-change activity is recorded (e.g. freshly created
+ * orders still sitting in "received").
+ */
+function statusSince(d: RepairOrderDetail): string | undefined {
+  const entered = (d.activities ?? [])
+    .filter((a) => a.toStatus === d.status && a.performedAt)
+    .sort(
+      (a, b) =>
+        new Date(b.performedAt).getTime() - new Date(a.performedAt).getTime()
+    )[0];
+  return entered?.performedAt || d.updatedAt;
+}
+
+/** Whole days between `iso` and now, floored at 0. */
+function daysSince(iso?: string): number | undefined {
+  if (!iso) return undefined;
+  const ms = Date.now() - new Date(iso).getTime();
+  if (Number.isNaN(ms)) return undefined;
+  return Math.max(0, Math.floor(ms / 86_400_000));
+}
+
 function detailToRequest(d: RepairOrderDetail): RepairOrderRequest {
   return {
     owningCompany: d.owningCompany,
@@ -635,6 +667,41 @@ export function RepairOrderEdit() {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="currentStatus">Current Status</Label>
+                <div
+                  id="currentStatus"
+                  className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-md border bg-muted/40 px-3 py-2"
+                >
+                  <Badge variant={STATUS_VARIANTS[detail.status] || "outline"}>
+                    {STATUS_LABELS[detail.status] || detail.status}
+                  </Badge>
+                  {withVendor && (
+                    <Badge className="bg-amber-500 hover:bg-amber-500 text-white">
+                      <Truck className="size-3 mr-1" />
+                      With Vendor
+                      {activeLeg?.vendorName ? `: ${activeLeg.vendorName}` : ""}
+                    </Badge>
+                  )}
+                  <span className="text-sm text-muted-foreground">
+                    {(() => {
+                      const since = statusSince(detail);
+                      const days = daysSince(since);
+                      if (!since) return "Stage start not recorded";
+                      const age =
+                        days === undefined
+                          ? ""
+                          : days === 0
+                            ? " (today)"
+                            : ` (${days} day${days === 1 ? "" : "s"})`;
+                      return `In this stage since ${fmtDate(since)}${age}`;
+                    })()}
+                  </span>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Use “Change Status” to move this order to the next stage.
+                </p>
+              </div>
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="engineer">Assigned Engineer</Label>

@@ -369,6 +369,9 @@ export function FinanceInvoiceCreate() {
                   unitPrice: 0,
                   discount: 0,
                   gst: 18,
+                  // Matches the default applied to loaded items above; without
+                  // it a blank invoice row carried no unit of measure.
+                  uom: "nos",
                   total: 0,
                 },
               ]

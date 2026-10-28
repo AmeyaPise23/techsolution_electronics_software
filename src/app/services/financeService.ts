@@ -1,7 +1,7 @@
 // Finance Service - API integration layer
 import { authService } from "./authService";
 
-const API_BASE_URL = "http://localhost:8080/api";
+import { API_BASE_URL } from "../config";
 
 // ==================== INTERFACES ====================
 
@@ -252,132 +252,31 @@ export interface CashFlowData {
   monthlyCashFlow: { month: string; inflow: number; outflow: number }[];
 }
 
-// ==================== MOCK DATA ====================
+// ==================== MOCK DATA (for endpoints not yet backed by API) ====================
 
-const mockKPIData: KPIData = {
-  totalRevenue: 2847500,
-  grossProfit: 1425000,
-  netProfit: 856500,
-  totalExpenses: 568500,
-  outstandingPayments: 145000,
-  cashAvailable: 1250000,
-  monthlyRevenue: 475000,
-  monthlyProfit: 142500,
-  profitMargin: 30.1,
-  activeCustomers: 1247,
-  totalInvoices: 3458,
-  averageOrderValue: 823.5,
-  revenueChange: 12.5,
-  profitChange: 8.3,
-  expensesChange: -5.2,
-};
+interface BackendExpense {
+  id: number;
+  category: string;
+  description: string;
+  amount: number;
+  expenseDate: string;
+  vendor: string | null;
+  status: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
 
-const mockRevenueData: RevenueData = {
-  monthly: [
-    { month: "Jan", revenue: 385000, profit: 115500 },
-    { month: "Feb", revenue: 420000, profit: 126000 },
-    { month: "Mar", revenue: 395000, profit: 118500 },
-    { month: "Apr", revenue: 445000, profit: 133500 },
-    { month: "May", revenue: 475000, profit: 142500 },
-    { month: "Jun", revenue: 460000, profit: 138000 },
-  ],
-  quarterly: [
-    { quarter: "Q1", revenue: 1200000 },
-    { quarter: "Q2", revenue: 1380000 },
-    { quarter: "Q3", revenue: 1450000 },
-    { quarter: "Q4", revenue: 1620000 },
-  ],
-  byProduct: [
-    { product: "Premium Wireless Headphones", revenue: 524000 },
-    { product: "Minimalist Leather Watch", revenue: 445000 },
-    { product: "Professional Camera", revenue: 385000 },
-    { product: "Smart Home Hub", revenue: 325000 },
-    { product: "Fitness Tracker Pro", revenue: 285000 },
-  ],
-  byCategory: [
-    { category: "Audio", revenue: 725000 },
-    { category: "Watches", revenue: 545000 },
-    { category: "Cameras", revenue: 485000 },
-    { category: "Home", revenue: 425000 },
-    { category: "Fitness", revenue: 365000 },
-  ],
-  byCustomer: [
-    { customer: "TechCorp Inc.", revenue: 385000 },
-    { customer: "Global Retail Ltd.", revenue: 325000 },
-    { customer: "Digital Solutions", revenue: 275000 },
-    { customer: "Smart Devices Co.", revenue: 245000 },
-    { customer: "Innovation Labs", revenue: 215000 },
-  ],
-  byRegion: [
-    { region: "North America", revenue: 985000 },
-    { region: "Europe", revenue: 745000 },
-    { region: "Asia Pacific", revenue: 625000 },
-    { region: "Latin America", revenue: 285000 },
-    { region: "Middle East", revenue: 207500 },
-  ],
-};
-
-const mockExpenses: Expense[] = [
-  {
-    id: "1",
-    category: "Outsourcing",
-    description: "Web development services",
-    amount: 45000,
-    date: "2026-05-15",
-    vendor: "Dev Solutions Inc.",
-    status: "paid",
-  },
-  {
-    id: "2",
-    category: "Salaries",
-    description: "Employee salaries - May",
-    amount: 185000,
-    date: "2026-05-01",
-    status: "paid",
-  },
-  {
-    id: "3",
-    category: "Marketing",
-    description: "Google Ads campaign",
-    amount: 25000,
-    date: "2026-05-20",
-    vendor: "Google LLC",
-    status: "paid",
-  },
-  {
-    id: "4",
-    category: "Cloud Hosting",
-    description: "AWS hosting fees",
-    amount: 8500,
-    date: "2026-05-10",
-    vendor: "Amazon Web Services",
-    status: "paid",
-  },
-  {
-    id: "5",
-    category: "Software Licenses",
-    description: "Adobe Creative Cloud",
-    amount: 3500,
-    date: "2026-05-05",
-    vendor: "Adobe Inc.",
-    status: "paid",
-  },
-];
-
-const mockProfitData: ProfitData = {
-  revenue: 2847500,
-  productCost: 1422500,
-  grossProfit: 1425000,
-  outsourcingCost: 145000,
-  salaries: 285000,
-  marketing: 85000,
-  infrastructure: 35000,
-  operationalExpenses: 45000,
-  taxes: 28500,
-  netProfit: 856500,
-  profitMargin: 30.1,
-  operatingMargin: 35.2,
-};
+function toExpense(b: BackendExpense): Expense {
+  return {
+    id: String(b.id),
+    category: b.category,
+    description: b.description,
+    amount: b.amount,
+    date: b.expenseDate,
+    vendor: b.vendor ?? undefined,
+    status: (b.status?.toLowerCase() ?? "pending") as Expense["status"],
+  };
+}
 
 const mockProductProfitability: ProductProfitability[] = [
   {
@@ -460,139 +359,80 @@ const mockVendors: Vendor[] = [
   },
 ];
 
-const mockInvoices: Invoice[] = [
-  {
-    id: "1",
-    invoiceNumber: "INV-2026-1001",
-    customer: {
-      name: "John Doe",
-      company: "TechCorp Inc.",
-      email: "john@techcorp.com",
-      phone: "+1-555-0123",
-      address: "123 Tech Street, San Francisco, CA 94102",
-      gstNumber: "GST123456789",
-    },
-    invoiceDate: "2026-05-20",
-    dueDate: "2026-06-20",
-    items: [
-      {
-        productName: "Premium Wireless Headphones",
-        quantity: 10,
-        unitPrice: 349.99,
-        discount: 5,
-        gst: 18,
-        total: 3849.9,
-      },
-      {
-        productName: "Minimalist Leather Watch",
-        quantity: 5,
-        unitPrice: 299.99,
-        discount: 0,
-        gst: 18,
-        total: 1769.94,
-      },
-    ],
-    subtotal: 5324.94,
-    totalDiscount: 174.95,
-    totalGst: 958.49,
-    grandTotal: 6108.48,
-    status: "paid",
-  },
-  {
-    id: "2",
-    invoiceNumber: "INV-2026-1002",
-    customer: {
-      name: "Jane Smith",
-      company: "Global Retail Ltd.",
-      email: "jane@globalretail.com",
-      phone: "+1-555-0124",
-      address: "456 Commerce Ave, New York, NY 10001",
-    },
-    invoiceDate: "2026-05-22",
-    dueDate: "2026-06-22",
-    items: [
-      {
-        productName: "Professional Camera",
-        quantity: 3,
-        unitPrice: 1299.99,
-        discount: 10,
-        gst: 18,
-        total: 4105.17,
-      },
-    ],
-    subtotal: 3899.97,
-    totalDiscount: 389.99,
-    totalGst: 701.99,
-    grandTotal: 4211.97,
-    status: "generated",
-  },
-];
-
-const mockCashFlowData: CashFlowData = {
-  cashInflow: 2847500,
-  cashOutflow: 1991000,
-  pendingReceivables: 145000,
-  upcomingPayables: 85000,
-  availableCash: 1250000,
-  monthlyCashFlow: [
-    { month: "Jan", inflow: 385000, outflow: 325000 },
-    { month: "Feb", inflow: 420000, outflow: 345000 },
-    { month: "Mar", inflow: 395000, outflow: 315000 },
-    { month: "Apr", inflow: 445000, outflow: 365000 },
-    { month: "May", inflow: 475000, outflow: 385000 },
-    { month: "Jun", inflow: 460000, outflow: 355000 },
-  ],
-};
-
 // ==================== SERVICE ====================
 
 export const financeService = {
   // Overview
   async getOverview(): Promise<KPIData> {
-    // TODO: const response = await fetch(`${API_BASE_URL}/finance/overview`);
-    // TODO: return response.json();
-    return mockKPIData;
+    const response = await authService.authenticatedFetch(`${API_BASE_URL}/finance/overview`);
+    const body = await parseJsonResponse<{ success: boolean; data: KPIData }>(response);
+    return body.data;
   },
 
   // Revenue
   async getRevenueData(): Promise<RevenueData> {
-    // TODO: const response = await fetch(`${API_BASE_URL}/finance/revenue`);
-    // TODO: return response.json();
-    return mockRevenueData;
+    const response = await authService.authenticatedFetch(`${API_BASE_URL}/finance/revenue`);
+    const body = await parseJsonResponse<{ success: boolean; data: RevenueData }>(response);
+    return body.data;
   },
 
   // Expenses
   async getExpenses(): Promise<Expense[]> {
-    // TODO: const response = await fetch(`${API_BASE_URL}/finance/expenses`);
-    // TODO: return response.json();
-    return mockExpenses;
+    const response = await authService.authenticatedFetch(`${API_BASE_URL}/finance/expenses`);
+    const body = await parseJsonResponse<{ success: boolean; data: BackendExpense[] }>(response);
+    return body.data.map(toExpense);
   },
 
   async createExpense(expense: Omit<Expense, "id">): Promise<Expense> {
-    // TODO: const response = await fetch(`${API_BASE_URL}/finance/expenses`, {...});
-    // TODO: return response.json();
-    const newExpense = { ...expense, id: Date.now().toString() };
-    console.log("Create expense:", newExpense);
-    return newExpense;
+    const response = await authService.authenticatedFetch(`${API_BASE_URL}/finance/expenses`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        category: expense.category,
+        description: expense.description,
+        amount: expense.amount,
+        expenseDate: expense.date,
+        vendor: expense.vendor,
+        status: expense.status?.toUpperCase(),
+      }),
+    });
+    const body = await parseJsonResponse<{ success: boolean; data: BackendExpense }>(response);
+    return toExpense(body.data);
   },
 
   async updateExpense(id: string, expense: Partial<Expense>): Promise<Expense> {
-    // TODO: const response = await fetch(`${API_BASE_URL}/finance/expenses/${id}`, {...});
-    // TODO: return response.json();
-    console.log("Update expense:", id, expense);
-    return { ...mockExpenses[0], ...expense, id };
+    const existing = (await this.getExpenses()).find((e) => e.id === id);
+    const merged = { ...existing, ...expense };
+    const response = await authService.authenticatedFetch(`${API_BASE_URL}/finance/expenses/${id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        category: merged.category,
+        description: merged.description,
+        amount: merged.amount,
+        expenseDate: merged.date,
+        vendor: merged.vendor,
+        status: merged.status?.toUpperCase(),
+      }),
+    });
+    const body = await parseJsonResponse<{ success: boolean; data: BackendExpense }>(response);
+    return toExpense(body.data);
   },
 
   async deleteExpense(id: string): Promise<void> {
-    // TODO: await fetch(`${API_BASE_URL}/finance/expenses/${id}`, { method: 'DELETE' });
-    console.log("Delete expense:", id);
+    const response = await authService.authenticatedFetch(`${API_BASE_URL}/finance/expenses/${id}`, {
+      method: "DELETE",
+    });
+    if (!response.ok) {
+      throw new Error(await getErrorMessage(response));
+    }
   },
 
   // Profit
   async getProfitData(): Promise<ProfitData> {
-    // TODO: const response = await fetch(`${API_BASE_URL}/finance/profit`);
-    // TODO: return response.json();
-    return mockProfitData;
+    const response = await authService.authenticatedFetch(`${API_BASE_URL}/finance/profit`);
+    const body = await parseJsonResponse<{ success: boolean; data: ProfitData }>(response);
+    return body.data;
   },
 
   async getProductProfitability(): Promise<ProductProfitability[]> {
@@ -828,9 +668,9 @@ export const financeService = {
 
   // Cash Flow
   async getCashFlow(): Promise<CashFlowData> {
-    // TODO: const response = await fetch(`${API_BASE_URL}/finance/cashflow`);
-    // TODO: return response.json();
-    return mockCashFlowData;
+    const response = await authService.authenticatedFetch(`${API_BASE_URL}/finance/cashflow`);
+    const body = await parseJsonResponse<{ success: boolean; data: CashFlowData }>(response);
+    return body.data;
   },
 };
 

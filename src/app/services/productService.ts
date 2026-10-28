@@ -1,3 +1,5 @@
+import { authService } from "./authService";
+
 export interface VariantChip {
   id: string;
   name: string;
@@ -202,8 +204,9 @@ interface BackendProduct {
   createdAt?: string;
 }
 
-const API_BASE_URL =
-  import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8080/api";
+import { API_BASE_URL } from "../config";
+
+const authFetch = authService.authenticatedFetch.bind(authService);
 
 const PRODUCT_LIST_URL = `${API_BASE_URL}/products/products/list.json`;
 const PRODUCT_LISTING_URL = `${API_BASE_URL}/products`;
@@ -376,59 +379,33 @@ export const productService = {
   },
 
   async createProduct(data: ProductFormData): Promise<ProductFormData> {
-    const token = localStorage.getItem("auth_token");
     const formData = buildProductFormData(data);
-
-    const response = await fetch(PRODUCT_CREATE_URL, {
+    const response = await authFetch(PRODUCT_CREATE_URL, {
       method: "POST",
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
       body: formData,
     });
-
     const product = await parseApiResponse<BackendProduct>(response);
     return mapBackendProduct(product);
   },
 
   async updateProduct(id: string, data: ProductFormData): Promise<ProductFormData> {
-    // TODO: Replace with actual API call
-    // const response = await fetch(`${API_BASE_URL}/products/${id}`, {
-    //   method: 'PUT',
-    //   headers: { 'Content-Type': 'application/json' },
-    //   body: JSON.stringify(data),
-    // });
-    // return response.json();
-
-    // Mock implementation
-    console.log("Update product:", id, data);
-    return { ...data, id };
+    const formData = buildProductFormData(data);
+    const response = await authFetch(`${PRODUCT_DELETE_URL}/${id}`, {
+      method: "PUT",
+      body: formData,
+    });
+    const product = await parseApiResponse<BackendProduct>(response);
+    return mapBackendProduct(product);
   },
 
   async deleteProduct(id: string): Promise<void> {
-    const token = localStorage.getItem("auth_token");
-    const response = await fetch(`${PRODUCT_DELETE_URL}/${id}`, {
+    const response = await authFetch(`${PRODUCT_DELETE_URL}/${id}`, {
       method: "DELETE",
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
     });
-
     await parseApiResponse<ApiResponse<void>>(response);
   },
 
   async uploadImage(file: File): Promise<string> {
-    // TODO: Replace with actual image upload
-    // const formData = new FormData();
-    // formData.append('file', file);
-    // const response = await fetch(`${API_BASE_URL}/upload`, {
-    //   method: 'POST',
-    //   body: formData,
-    // });
-    // const data = await response.json();
-    // return data.url;
-
-    // Mock implementation - returns a placeholder URL
     return URL.createObjectURL(file);
   },
 

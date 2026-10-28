@@ -1,40 +1,34 @@
-import { Comment, HistoryEventType, ID } from "../types";
-import { simulateLatency } from "../mock/latency";
-import { snapshot, useWorkStore } from "../mock/store";
+import { Comment, ID } from "../types";
+import { wmGet, wmPost, s } from "./api";
 
-export async function listComments(taskId: ID): Promise<Comment[]> {
-  await simulateLatency();
-  return snapshot()
-    .comments.filter((c) => c.taskId === taskId)
-    .sort((a, b) => (a.createdAt < b.createdAt ? -1 : 1));
+interface BackendComment {
+  id: number;
+  taskId: number;
+  authorUserId: number;
+  body: string;
+  editedAt: string | null;
+  createdAt: string;
 }
 
-export async function addComment(taskId: ID, authorId: ID, body: string): Promise<Comment> {
-  const now = new Date().toISOString();
-  const c: Comment = {
-    id: `cmt-${Date.now()}`,
-    tenantId: "tenant-demo",
-    taskId,
-    authorId,
-    body,
-    createdAt: now,
-    updatedAt: now,
+function toComment(b: BackendComment): Comment {
+  return {
+    id: s(b.id),
+    tenantId: "",
+    taskId: s(b.taskId),
+    authorId: s(b.authorUserId),
+    body: b.body,
+    editedAt: b.editedAt ?? undefined,
+    createdAt: b.createdAt,
+    updatedAt: b.createdAt,
   };
-  useWorkStore.getState().patch((draft) => {
-    draft.comments.push(c);
-    const task = draft.tasks.find((t) => t.id === taskId);
-    if (task) {
-      draft.history.push({
-        id: `hst-${Date.now()}`,
-        tenantId: "tenant-demo",
-        eventType: HistoryEventType.CommentAdded,
-        actorId: authorId,
-        occurredAt: now,
-        projectId: task.projectId,
-        taskId: task.id,
-      });
-    }
-  });
-  await simulateLatency();
-  return c;
+}
+
+export async function listComments(taskId: ID): Promise<Comment[]> {
+  const raw = await wmGet<BackendComment[]>(`/tasks/${taskId}/comments`);
+  return raw.map(toComment).sort((a, b) => (a.createdAt < b.createdAt ? -1 : 1));
+}
+
+export async function addComment(taskId: ID, _authorId: ID, body: string): Promise<Comment> {
+  const raw = await wmPost<BackendComment>(`/tasks/${taskId}/comments`, { body });
+  return toComment(raw);
 }

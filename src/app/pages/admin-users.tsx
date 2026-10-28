@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { Plus, Search, Users, Shield, ShieldCheck, UserX, UserCheck } from "lucide-react";
+import { Plus, Search, Users, Shield, ShieldCheck, UserX, UserCheck, Crown, LockOpen } from "lucide-react";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import {
@@ -26,7 +26,15 @@ import {
 } from "../components/ui/select";
 import { Label } from "../components/ui/label";
 import { Badge } from "../components/ui/badge";
-import { userService, UserInfo, CreateUserData } from "../services/userService";
+import {
+  userService,
+  UserInfo,
+  CreateUserData,
+  UpdateUserData,
+  SystemRole,
+  WorkRole,
+  isRoot,
+} from "../services/userService";
 import { toast } from "sonner";
 
 export function AdminUsers() {
@@ -41,13 +49,16 @@ export function AdminUsers() {
     username: "",
     email: "",
     password: "",
-    role: "ROLE_USER",
+    role: "ROLE_USER" as SystemRole,
+    fullName: "",
+    phone: "",
+    workRole: "EMPLOYEE" as WorkRole,
   });
 
   const loadUsers = useCallback(async () => {
     try {
       setLoading(true);
-      const data = await userService.listUsers(0, 100);
+      const data = await userService.listUsers({ page: 0, size: 100 });
       setUsers(data.content);
     } catch {
       toast.error("Failed to load users");
@@ -72,7 +83,15 @@ export function AdminUsers() {
 
   function handleAdd() {
     setEditingUser(null);
-    setFormData({ username: "", email: "", password: "", role: "ROLE_USER" });
+    setFormData({
+      username: "",
+      email: "",
+      password: "",
+      role: "ROLE_USER",
+      fullName: "",
+      phone: "",
+      workRole: "EMPLOYEE",
+    });
     setDialogOpen(true);
   }
 
@@ -83,6 +102,9 @@ export function AdminUsers() {
       email: user.email,
       password: "",
       role: user.role,
+      fullName: user.fullName ?? "",
+      phone: user.phone ?? "",
+      workRole: user.workRole,
     });
     setDialogOpen(true);
   }
@@ -91,11 +113,23 @@ export function AdminUsers() {
     try {
       setSaving(true);
       if (editingUser) {
-        const updateData: Record<string, unknown> = {};
+        const updateData: UpdateUserData = {};
         if (formData.email !== editingUser.email) updateData.email = formData.email;
-        if (formData.password) updateData.password = formData.password;
         if (formData.role !== editingUser.role) updateData.role = formData.role;
+        if (formData.workRole !== editingUser.workRole) updateData.workRole = formData.workRole;
+        if (formData.fullName !== (editingUser.fullName ?? "")) updateData.fullName = formData.fullName;
+        if (formData.phone !== (editingUser.phone ?? "")) updateData.phone = formData.phone;
+
         const updated = await userService.updateUser(editingUser.id, updateData);
+
+        // A password is not part of the update payload — setting someone
+        // else's password ends their sessions and forces a change at next
+        // sign-in, so it is its own call rather than a silent side effect.
+        if (formData.password) {
+          await userService.resetPassword(editingUser.id, formData.password);
+          toast.success("Password reset — the user's sessions have been ended");
+        }
+
         setUsers((prev) => prev.map((u) => (u.id === updated.id ? updated : u)));
         toast.success("User updated");
       } else {
@@ -125,7 +159,18 @@ export function AdminUsers() {
     }
   }
 
+  async function handleUnlock(user: UserInfo) {
+    try {
+      const updated = await userService.unlockUser(user.id);
+      setUsers((prev) => prev.map((u) => (u.id === updated.id ? updated : u)));
+      toast.success("Account unlocked");
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : "Failed to unlock account");
+    }
+  }
+
   function roleLabel(role: string) {
+    if (role === "ROLE_ROOT") return "Owner";
     if (role === "ROLE_ADMIN") return "Admin";
     if (role === "ROLE_USER") return "User";
     return role.replace("ROLE_", "");
@@ -203,32 +248,64 @@ export function AdminUsers() {
                   <TableCell className="font-medium">{user.username}</TableCell>
                   <TableCell>{user.email}</TableCell>
                   <TableCell>
-                    <Badge variant={user.role === "ROLE_ADMIN" ? "default" : "secondary"} className="gap-1">
-                      {user.role === "ROLE_ADMIN" ? <ShieldCheck className="size-3" /> : <Shield className="size-3" />}
+                    <Badge variant={user.role === "ROLE_USER" ? "secondary" : "default"} className="gap-1">
+                      {isRoot(user) ? (
+                        <Crown className="size-3" />
+                      ) : user.role === "ROLE_ADMIN" ? (
+                        <ShieldCheck className="size-3" />
+                      ) : (
+                        <Shield className="size-3" />
+                      )}
                       {roleLabel(user.role)}
                     </Badge>
                   </TableCell>
                   <TableCell>
-                    <Badge variant={user.enabled ? "default" : "destructive"} className="text-xs">
-                      {user.enabled ? "Active" : "Disabled"}
+                    <Badge
+                      variant={!user.enabled ? "destructive" : user.locked ? "outline" : "default"}
+                      className="text-xs"
+                    >
+                      {!user.enabled ? "Disabled" : user.locked ? "Locked" : "Active"}
                     </Badge>
                   </TableCell>
                   <TableCell className="text-muted-foreground text-sm">{formatDate(user.createdAt)}</TableCell>
                   <TableCell className="text-muted-foreground text-sm">{formatDate(user.lastLogin)}</TableCell>
                   <TableCell className="text-right">
                     <div className="flex items-center justify-end gap-1">
-                      <Button variant="ghost" size="sm" onClick={() => handleEdit(user)}>
-                        Edit
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="size-8"
-                        onClick={() => handleToggleEnabled(user)}
-                        title={user.enabled ? "Disable user" : "Enable user"}
-                      >
-                        {user.enabled ? <UserX className="size-4 text-destructive" /> : <UserCheck className="size-4 text-green-600" />}
-                      </Button>
+                      {isRoot(user) ? (
+                        // The owner account is shown for completeness but is
+                        // read-only here; it maintains itself from the account
+                        // screen. The server refuses these calls regardless —
+                        // this only avoids offering a button that cannot work.
+                        <span className="text-xs text-muted-foreground pr-2">
+                          Owner account
+                        </span>
+                      ) : (
+                        <>
+                          {user.locked && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="size-8"
+                              onClick={() => handleUnlock(user)}
+                              title="Unlock account"
+                            >
+                              <LockOpen className="size-4 text-amber-600" />
+                            </Button>
+                          )}
+                          <Button variant="ghost" size="sm" onClick={() => handleEdit(user)}>
+                            Edit
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="size-8"
+                            onClick={() => handleToggleEnabled(user)}
+                            title={user.enabled ? "Disable user" : "Enable user"}
+                          >
+                            {user.enabled ? <UserX className="size-4 text-destructive" /> : <UserCheck className="size-4 text-green-600" />}
+                          </Button>
+                        </>
+                      )}
                     </div>
                   </TableCell>
                 </TableRow>
@@ -256,6 +333,15 @@ export function AdminUsers() {
               </div>
             )}
             <div className="space-y-2">
+              <Label htmlFor="fullName">Full name</Label>
+              <Input
+                id="fullName"
+                value={formData.fullName}
+                onChange={(e) => setFormData((f) => ({ ...f, fullName: e.target.value }))}
+                placeholder="Enter full name"
+              />
+            </div>
+            <div className="space-y-2">
               <Label htmlFor="email">Email</Label>
               <Input
                 id="email"
@@ -266,26 +352,65 @@ export function AdminUsers() {
               />
             </div>
             <div className="space-y-2">
+              <Label htmlFor="phone">Phone</Label>
+              <Input
+                id="phone"
+                value={formData.phone}
+                onChange={(e) => setFormData((f) => ({ ...f, phone: e.target.value }))}
+                placeholder="Enter phone number"
+              />
+            </div>
+            <div className="space-y-2">
               <Label htmlFor="password">
-                {editingUser ? "New Password (leave blank to keep)" : "Password"}
+                {editingUser ? "Reset password (leave blank to keep)" : "Password"}
               </Label>
               <Input
                 id="password"
                 type="password"
                 value={formData.password}
                 onChange={(e) => setFormData((f) => ({ ...f, password: e.target.value }))}
-                placeholder={editingUser ? "Leave blank to keep current" : "Enter password"}
+                placeholder={editingUser ? "Leave blank to keep current" : "At least 10 characters"}
               />
+              <p className="text-xs text-muted-foreground">
+                {editingUser
+                  ? "Setting a password here ends the user's sessions and asks them to choose a new one at next sign-in."
+                  : "At least 10 characters, with a letter and a digit."}
+              </p>
             </div>
             <div className="space-y-2">
               <Label htmlFor="role">Role</Label>
-              <Select value={formData.role} onValueChange={(v) => setFormData((f) => ({ ...f, role: v }))}>
+              <Select
+                value={formData.role}
+                onValueChange={(v) => setFormData((f) => ({ ...f, role: v as SystemRole }))}
+              >
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
+                  {/* Owner is absent by design: there is exactly one per
+                      company, created when the company is provisioned, and the
+                      server refuses to assign it. */}
                   <SelectItem value="ROLE_USER">User</SelectItem>
                   <SelectItem value="ROLE_ADMIN">Admin</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                Only the owner account can grant or revoke Admin.
+              </p>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="workRole">Work role</Label>
+              <Select
+                value={formData.workRole}
+                onValueChange={(v) => setFormData((f) => ({ ...f, workRole: v as WorkRole }))}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="EMPLOYEE">Employee</SelectItem>
+                  <SelectItem value="HR">HR</SelectItem>
+                  <SelectItem value="MANAGER">Manager</SelectItem>
                 </SelectContent>
               </Select>
             </div>

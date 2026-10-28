@@ -1,19 +1,41 @@
-import { HistoryEventType, ID, TimeLog, TimeLogFilters } from "../types";
-import { simulateLatency } from "../mock/latency";
-import { snapshot, useWorkStore } from "../mock/store";
+import { ID, TimeLog, TimeLogFilters } from "../types";
+import { wmGet, wmPost, s } from "./api";
+
+interface BackendTimeLog {
+  id: number;
+  employeeUserId: number;
+  taskId: number;
+  projectId: number;
+  workDate: string;
+  durationMinutes: number;
+  note: string | null;
+  createdAt: string;
+}
+
+function toTimeLog(b: BackendTimeLog): TimeLog {
+  return {
+    id: s(b.id),
+    tenantId: "",
+    employeeId: s(b.employeeUserId),
+    taskId: s(b.taskId),
+    projectId: s(b.projectId),
+    workDate: b.workDate,
+    durationMinutes: b.durationMinutes,
+    note: b.note ?? undefined,
+    createdAt: b.createdAt,
+    updatedAt: b.createdAt,
+  };
+}
 
 export async function listTimeLogs(filters: TimeLogFilters): Promise<TimeLog[]> {
-  await simulateLatency();
-  const { timeLogs } = snapshot();
-  return timeLogs
-    .filter((l) => {
-      if (l.workDate < filters.dateFrom || l.workDate > filters.dateTo) return false;
-      if (filters.employeeIds?.length && !filters.employeeIds.includes(l.employeeId)) return false;
-      if (filters.projectId && l.projectId !== filters.projectId) return false;
-      if (filters.taskId && l.taskId !== filters.taskId) return false;
-      return true;
-    })
-    .sort((a, b) => (a.workDate < b.workDate ? -1 : 1));
+  const params = new URLSearchParams();
+  params.set("dateFrom", filters.dateFrom);
+  params.set("dateTo", filters.dateTo);
+  if (filters.projectId) params.set("projectId", filters.projectId);
+  if (filters.taskId) params.set("taskId", filters.taskId);
+  if (filters.employeeIds?.length) params.set("employeeUserId", filters.employeeIds[0]);
+  const raw = await wmGet<BackendTimeLog[]>(`/time-logs?${params}`);
+  return raw.map(toTimeLog).sort((a, b) => (a.workDate < b.workDate ? -1 : 1));
 }
 
 export interface LogTimeInput {
@@ -24,36 +46,13 @@ export interface LogTimeInput {
   note?: string;
 }
 
-export async function logTime(input: LogTimeInput, actorId: ID): Promise<TimeLog> {
-  const now = new Date().toISOString();
-  const state = snapshot();
-  const task = state.tasks.find((t) => t.id === input.taskId);
-  if (!task) throw new Error(`Task ${input.taskId} not found`);
-  const log: TimeLog = {
-    id: `tl-${Date.now()}`,
-    tenantId: "tenant-demo",
-    employeeId: input.employeeId,
-    taskId: input.taskId,
-    projectId: task.projectId,
+export async function logTime(input: LogTimeInput, _actorId: ID): Promise<TimeLog> {
+  const raw = await wmPost<BackendTimeLog>("/time-logs", {
+    taskId: Number(input.taskId),
+    projectId: null,
     workDate: input.workDate,
     durationMinutes: input.durationMinutes,
     note: input.note,
-    createdAt: now,
-    updatedAt: now,
-  };
-  useWorkStore.getState().patch((draft) => {
-    draft.timeLogs.push(log);
-    draft.history.push({
-      id: `hst-${Date.now()}`,
-      tenantId: "tenant-demo",
-      eventType: HistoryEventType.TimeLogged,
-      actorId,
-      occurredAt: now,
-      projectId: task.projectId,
-      taskId: task.id,
-      message: `${(input.durationMinutes / 60).toFixed(2)}h logged on ${input.workDate}`,
-    });
   });
-  await simulateLatency();
-  return log;
+  return toTimeLog(raw);
 }

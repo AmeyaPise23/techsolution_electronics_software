@@ -92,6 +92,35 @@ const PRIORITY_LABEL: Record<RepairPriorityApi, string> = {
   urgent: "Urgent",
 };
 
+/** Labels match the repair order detail page so the list and record agree. */
+const STATUS_LABEL: Record<RepairStatusApi, string> = {
+  received: "Received",
+  inspection: "Inspection",
+  waiting_for_customer_approval: "Waiting for Approval",
+  waiting_for_parts: "Waiting for Parts",
+  under_repair: "Under Repair",
+  testing: "Testing",
+  quality_check: "Quality Check",
+  ready_for_delivery: "Ready for Delivery",
+  delivered: "Delivered",
+  completed: "Completed",
+  cancelled: "Cancelled",
+};
+
+const STATUS_PILL: Record<RepairStatusApi, string> = {
+  received: "bg-slate-50 text-slate-700 border-slate-200",
+  inspection: "bg-sky-50 text-sky-700 border-sky-100",
+  waiting_for_customer_approval: "bg-amber-50 text-amber-700 border-amber-100",
+  waiting_for_parts: "bg-orange-50 text-orange-700 border-orange-100",
+  under_repair: "bg-blue-50 text-blue-700 border-blue-100",
+  testing: "bg-violet-50 text-violet-700 border-violet-100",
+  quality_check: "bg-indigo-50 text-indigo-700 border-indigo-100",
+  ready_for_delivery: "bg-teal-50 text-teal-700 border-teal-100",
+  delivered: "bg-emerald-50 text-emerald-700 border-emerald-100",
+  completed: "bg-emerald-50 text-emerald-700 border-emerald-100",
+  cancelled: "bg-red-50 text-red-700 border-red-100",
+};
+
 const DATE_RANGES = [
   { value: "any", label: "Any date" },
   { value: "today", label: "Today" },
@@ -544,7 +573,7 @@ export function RepairOrdersView({ view }: { view: RepairViewConfig }) {
                   <th className="px-5 py-3">Date Received</th>
                   <th className="px-5 py-3">Customer</th>
                   <th className="px-5 py-3">Machine</th>
-                  <th className="px-5 py-3">Issue Summary</th>
+                  <th className="px-5 py-3">Status</th>
                   <th className="px-5 py-3">Priority</th>
                   <th className="px-5 py-3">Assigned To</th>
                   <th className="px-5 py-3 text-right">Actions</th>
@@ -594,6 +623,10 @@ export function RepairOrdersView({ view }: { view: RepairViewConfig }) {
                         })
                       : "";
                     const priorityKey = (o.priority as RepairPriorityApi) || "normal";
+                    const statusKey =
+                      o.status && o.status in STATUS_LABEL
+                        ? (o.status as RepairStatusApi)
+                        : "received";
                     const customerLabel =
                       o.customerCompany || o.customerName || `#${o.customerId}`;
                     const isCancelled = o.status === "cancelled";
@@ -695,14 +728,12 @@ export function RepairOrdersView({ view }: { view: RepairViewConfig }) {
                             </div>
                           )}
                         </td>
-                        <td className="max-w-[260px] px-5 py-4">
-                          <p
-                            className={`line-clamp-2 ${
-                              isCancelled ? "text-slate-400" : "text-slate-600"
-                            }`}
+                        <td className="px-5 py-4">
+                          <span
+                            className={`inline-flex items-center whitespace-nowrap rounded-md border px-2 py-0.5 text-[12px] font-semibold ${STATUS_PILL[statusKey]}`}
                           >
-                            {getIssueSummary(o)}
-                          </p>
+                            {STATUS_LABEL[statusKey]}
+                          </span>
                         </td>
                         <td className="px-5 py-4">
                           {isCancelled ? (
@@ -894,20 +925,6 @@ export function RepairOrdersView({ view }: { view: RepairViewConfig }) {
         </AlertDialogContent>
       </AlertDialog>
     </div>
-  );
-}
-
-function getIssueSummary(o: RepairOrderSummary): string {
-  // RepairOrderSummary is loose ([key: string]: unknown on parent). The
-  // problem/complaint fields aren't declared but are commonly present.
-  const anyO = o as unknown as {
-    problemDescription?: string;
-    customerComplaint?: string;
-  };
-  return (
-    anyO.problemDescription ||
-    anyO.customerComplaint ||
-    "—"
   );
 }
 

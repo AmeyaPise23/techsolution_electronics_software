@@ -1,0 +1,47 @@
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    // ES2022 for String.replaceAll, already used in the work-done module.
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "jsx": "react-jsx",
+
+    // main.tsx imports with explicit .tsx/.ts extensions, which the bundler
+    // resolves; and import.meta.env needs Vite's ambient types.
+    "allowImportingTsExtensions": true,
+    "types": ["vite/client", "node"],
+
+    // Type-check only. Vite/esbuild does the emitting.
+    "noEmit": true,
+    "skipLibCheck": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "allowSyntheticDefaultImports": true,
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+
+    // This codebase was written without a type-checker, so full `strict` would
+    // bury real defects under a backlog of pre-existing noise. Start with the
+    // checks that catch genuine bugs and tighten over time.
+    "strict": false,
+    // noImplicitReturns is deliberately off: it fires on the idiomatic
+    // `useEffect(() => { if (!x) return; ... })` early-return all over this
+    // codebase, which is correct React, not a defect.
+    "noFallthroughCasesInSwitch": true,
+    "noUnusedLocals": false,
+    "noUnusedParameters": false,
+
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["./src/*"]
+    }
+  },
+  "include": ["src"],
+
+  // src/imports/pasted_text holds a single unreferenced Figma paste
+  // (finance-module.tsx) that does not parse — 421 syntax errors on its own.
+  // Nothing imports it, so Vite never bundles it. Excluded so the type-check
+  // reports on code that actually ships. It is a deletion candidate.
+  "exclude": ["node_modules", "dist", "backend", "src/imports/pasted_text"]
+}

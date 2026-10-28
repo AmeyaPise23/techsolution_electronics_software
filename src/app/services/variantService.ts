@@ -52,10 +52,11 @@ interface ApiResponse<T> {
   data: T;
 }
 
-const API_BASE_URL =
-  import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8080/api";
+import { authService } from "./authService";
+import { API_BASE_URL } from "../config";
 
 const VARIANT_BASE_URL = `${API_BASE_URL}/variants`;
+const authFetch = authService.authenticatedFetch.bind(authService);
 
 async function parseApiResponse<T>(response: Response): Promise<T> {
   const responseBody = await response.json();
@@ -75,13 +76,9 @@ export const variantService = {
   },
 
   async createVariant(data: VariantRequestDto): Promise<VariantResponseDto> {
-    const token = localStorage.getItem("auth_token");
-    const response = await fetch(VARIANT_BASE_URL, {
+    const response = await authFetch(VARIANT_BASE_URL, {
       method: "POST",
-      headers: {
-        Authorization: `Bearer ${token}`,
-        "Content-Type": "application/json",
-      },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify(data),
     });
     return parseApiResponse<VariantResponseDto>(response);
@@ -91,25 +88,17 @@ export const variantService = {
     variantId: string,
     data: VariantRequestDto
   ): Promise<VariantResponseDto> {
-    const token = localStorage.getItem("auth_token");
-    const response = await fetch(`${VARIANT_BASE_URL}/${variantId}`, {
+    const response = await authFetch(`${VARIANT_BASE_URL}/${variantId}`, {
       method: "PUT",
-      headers: {
-        Authorization: `Bearer ${token}`,
-        "Content-Type": "application/json",
-      },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify(data),
     });
     return parseApiResponse<VariantResponseDto>(response);
   },
 
   async deleteVariant(variantId: string): Promise<void> {
-    const token = localStorage.getItem("auth_token");
-    const response = await fetch(`${VARIANT_BASE_URL}/${variantId}`, {
+    const response = await authFetch(`${VARIANT_BASE_URL}/${variantId}`, {
       method: "DELETE",
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
     });
     await parseApiResponse<void>(response);
   },

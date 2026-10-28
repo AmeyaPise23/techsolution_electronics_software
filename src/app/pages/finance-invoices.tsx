@@ -312,7 +312,11 @@ function AgingPanel({
   invoices: Invoice[];
   agingData?: InvoiceDashboardData["aging"];
 }) {
-  const aging = useMemo(() => {
+  // Both branches below produce this shape; only the server-supplied one
+  // carries a percentage, so it is optional rather than a second type.
+  type AgingSlice = { label: string; value: number; color: string; percentage?: number };
+
+  const aging = useMemo<AgingSlice[]>(() => {
     const colors = ["#22c55e", "#fbbf24", "#f97316", "#ef4444"];
     if (agingData?.buckets?.length) {
       return agingData.buckets.map((bucket, index) => ({
@@ -367,7 +371,7 @@ function AgingPanel({
         </div>
         <div className="space-y-4">
           {aging.map((item) => {
-            const pct = "percentage" in item
+            const pct = item.percentage !== undefined
               ? Math.round(item.percentage)
               : total > 0
                 ? Math.round((item.value / total) * 100)

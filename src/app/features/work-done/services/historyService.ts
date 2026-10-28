@@ -1,6 +1,5 @@
-import { HistoryEntry, ID } from "../types";
-import { simulateLatency } from "../mock/latency";
-import { snapshot } from "../mock/store";
+import { HistoryEntry, HistoryEventType, ID } from "../types";
+import { wmGet, s } from "./api";
 
 export interface HistoryFilters {
   projectId?: ID;
@@ -9,14 +8,44 @@ export interface HistoryFilters {
   limit?: number;
 }
 
+interface BackendHistory {
+  id: number;
+  eventType: string;
+  actorUserId: number;
+  occurredAt: string;
+  projectId: number | null;
+  milestoneId: number | null;
+  taskId: number | null;
+  changesJson: string | null;
+  message: string | null;
+}
+
+function toHistoryEntry(b: BackendHistory): HistoryEntry {
+  let changes: { field: string; from: unknown; to: unknown }[] | undefined;
+  if (b.changesJson) {
+    try { changes = JSON.parse(b.changesJson); } catch { /* ignore */ }
+  }
+  return {
+    id: s(b.id),
+    tenantId: "",
+    eventType: b.eventType as HistoryEventType,
+    actorId: s(b.actorUserId),
+    occurredAt: b.occurredAt,
+    projectId: b.projectId != null ? s(b.projectId) : undefined,
+    milestoneId: b.milestoneId != null ? s(b.milestoneId) : undefined,
+    taskId: b.taskId != null ? s(b.taskId) : undefined,
+    changes,
+    message: b.message ?? undefined,
+  };
+}
+
 export async function listHistory(filters: HistoryFilters = {}): Promise<HistoryEntry[]> {
-  await simulateLatency();
-  const items = snapshot().history.filter((h) => {
-    if (filters.projectId && h.projectId !== filters.projectId) return false;
-    if (filters.milestoneId && h.milestoneId !== filters.milestoneId) return false;
-    if (filters.taskId && h.taskId !== filters.taskId) return false;
-    return true;
-  });
-  items.sort((a, b) => (a.occurredAt < b.occurredAt ? 1 : -1));
-  return filters.limit ? items.slice(0, filters.limit) : items;
+  const params = new URLSearchParams();
+  if (filters.projectId) params.set("projectId", filters.projectId);
+  if (filters.milestoneId) params.set("milestoneId", filters.milestoneId);
+  if (filters.taskId) params.set("taskId", filters.taskId);
+  params.set("page", "0");
+  params.set("size", String(filters.limit ?? 50));
+  const raw = await wmGet<{ content: BackendHistory[] }>(`/history?${params}`);
+  return raw.content.map(toHistoryEntry);
 }

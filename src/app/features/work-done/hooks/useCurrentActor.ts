@@ -1,11 +1,6 @@
-// Bridges the app-wide auth user to a module-local Actor (Role + Employee.id).
-// In dev, we allow a URL-driven override (?asRole=MANAGER|HR|EMPLOYEE and
-// ?asEmployee=<id>) so the same account can preview each role's view — useful
-// while wiring up permission gates before real role assignments exist.
-
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "../../../context/AuthContext";
-import { snapshot } from "../mock/store";
+import { listEmployees } from "../services/employeeService";
 import { Employee, Role } from "../types";
 
 export interface CurrentActor {
@@ -38,7 +33,6 @@ export function setDevOverride(role: Role, employeeId: string): void {
   if (typeof window === "undefined") return;
   sessionStorage.setItem(OVERRIDE_ROLE_KEY, role);
   sessionStorage.setItem(OVERRIDE_EMPLOYEE_KEY, employeeId);
-  // Force reload so useAsync subscribers re-evaluate.
   window.location.reload();
 }
 
@@ -49,14 +43,24 @@ export function clearDevOverride(): void {
   window.location.reload();
 }
 
-// Default assumption while roles aren't wired to the auth provider: the
-// signed-in admin is the seeded Manager (emp-mgr-1). Dev override wins.
 export function useCurrentActor(): CurrentActor {
   const { user } = useAuth();
+  const [employees, setEmployees] = useState<Employee[]>([]);
+
+  useEffect(() => {
+    listEmployees().then(setEmployees).catch(() => {});
+  }, [user?.username]);
+
   return useMemo(() => {
     const override = readOverride();
-    const employees = snapshot().employees;
-    const fallbackEmployee = employees.find((e) => e.role === Role.Manager) ?? employees[0];
+    const fallbackEmployee: Employee = employees.find((e) => e.role === Role.Manager) ??
+      employees[0] ?? {
+        id: "0",
+        tenantId: "",
+        displayName: user?.username ?? "User",
+        email: "",
+        role: Role.Employee,
+      };
     const employee =
       (override.employeeId && employees.find((e) => e.id === override.employeeId)) ||
       fallbackEmployee;
@@ -67,7 +71,5 @@ export function useCurrentActor(): CurrentActor {
       employee,
       isDevOverride: !!(override.role || override.employeeId),
     };
-    // user is included so a login flip re-runs the memo.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.username]);
+  }, [user?.username, employees]);
 }

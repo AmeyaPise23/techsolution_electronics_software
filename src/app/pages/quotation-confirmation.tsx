@@ -7,7 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../co
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../components/ui/table";
 import { CheckCircle2, Clock, FileText, ArrowLeft, Loader2 } from "lucide-react";
 
-const API_BASE_URL = "http://localhost:8080/api";
+import { API_BASE_URL } from "../config";
 
 const priceFormatter = new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 2 });
 const formatPrice = (value: number) => priceFormatter.format(value);

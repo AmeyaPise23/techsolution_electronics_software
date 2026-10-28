@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router";
+import repairPin from "@/assets/repair-pin.svg";
 import { repairService } from "../services/repairService";
 import { clientService, Client } from "../services/clientService";
 import {
@@ -31,6 +32,19 @@ import {
   DialogTitle,
 } from "../components/ui/dialog";
 import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "../components/ui/popover";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "../components/ui/command";
+import {
   ArrowLeft,
   ArrowRight,
   Plus,
@@ -52,6 +66,7 @@ import {
   Lightbulb,
   Headphones,
   ExternalLink,
+  ChevronsUpDown,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -67,13 +82,6 @@ const PRIORITIES: {
   { value: "high", label: "High", dot: "bg-orange-500" },
   { value: "urgent", label: "Urgent", dot: "bg-red-500" },
 ];
-
-const STEPS = [
-  "Basic Information",
-  "Machine Details",
-  "Service Details",
-  "Review & Confirm",
-] as const;
 
 const NEXT_STEPS = [
   {
@@ -112,90 +120,6 @@ const NEXT_STEPS = [
     color: "text-emerald-600 bg-emerald-50",
   },
 ] as const;
-
-/**
- * Small illustration used in the header. Purely decorative — kept inline so
- * we don't need to ship an external asset.
- */
-function TechnicianIllustration() {
-  return (
-    <svg
-      viewBox="0 0 220 160"
-      xmlns="http://www.w3.org/2000/svg"
-      className="h-32 w-auto"
-      aria-hidden="true"
-    >
-      {/* soft background dots */}
-      <g fill="#c7d2fe" opacity="0.35">
-        <circle cx="10" cy="20" r="2" />
-        <circle cx="30" cy="130" r="2" />
-        <circle cx="200" cy="140" r="2.5" />
-        <circle cx="180" cy="20" r="1.5" />
-      </g>
-      {/* gear behind */}
-      <g transform="translate(160 108)" fill="#c7d2fe" opacity="0.55">
-        <circle r="20" />
-        <circle r="8" fill="#F7FAFF" />
-        <g>
-          {[0, 45, 90, 135, 180, 225, 270, 315].map((a) => (
-            <rect
-              key={a}
-              x="-3"
-              y="-26"
-              width="6"
-              height="6"
-              transform={`rotate(${a})`}
-            />
-          ))}
-        </g>
-      </g>
-      {/* toolbox */}
-      <g transform="translate(150 118)">
-        <rect x="0" y="10" width="46" height="28" rx="3" fill="#1e3a8a" />
-        <rect x="0" y="10" width="46" height="6" fill="#1d4ed8" />
-        <rect x="14" y="4" width="18" height="6" rx="2" fill="#1e40af" />
-        <rect x="20" y="20" width="6" height="10" fill="#fbbf24" />
-      </g>
-      {/* body */}
-      <g transform="translate(72 46)">
-        <rect x="10" y="46" width="60" height="52" rx="6" fill="#1d4ed8" />
-        {/* strap */}
-        <path d="M18 46 L40 82 L62 46 Z" fill="#1e3a8a" opacity="0.35" />
-        <circle cx="40" cy="66" r="3" fill="#fbbf24" />
-        {/* arms */}
-        <rect x="-2" y="52" width="16" height="12" rx="4" fill="#93c5fd" />
-        <rect x="66" y="52" width="18" height="12" rx="4" fill="#93c5fd" />
-        {/* skin (hands) */}
-        <circle cx="2" cy="58" r="6" fill="#fde1c8" />
-        <circle cx="86" cy="58" r="6" fill="#fde1c8" />
-        {/* wrench in hand */}
-        <g transform="translate(78 44) rotate(35)" fill="#94a3b8">
-          <rect x="0" y="0" width="18" height="4" rx="1" />
-          <path d="M-4 -2 h6 v8 h-6 a4 4 0 0 1 0 -8 z" />
-        </g>
-        {/* neck + head */}
-        <rect x="34" y="36" width="12" height="10" fill="#fde1c8" />
-        <circle cx="40" cy="26" r="14" fill="#fde1c8" />
-        {/* cap */}
-        <path
-          d="M24 24 Q40 4 56 24 L56 28 L24 28 Z"
-          fill="#1d4ed8"
-        />
-        <rect x="24" y="28" width="32" height="4" fill="#1e3a8a" />
-        {/* eyes + smile */}
-        <circle cx="35" cy="26" r="1.4" fill="#0f172a" />
-        <circle cx="45" cy="26" r="1.4" fill="#0f172a" />
-        <path
-          d="M36 32 Q40 35 44 32"
-          stroke="#0f172a"
-          strokeWidth="1.2"
-          fill="none"
-          strokeLinecap="round"
-        />
-      </g>
-    </svg>
-  );
-}
 
 function SectionCard({
   icon: Icon,
@@ -263,6 +187,7 @@ export function RepairOrderCreate() {
 
   // ── Customer + contact ──
   const [customerId, setCustomerId] = useState<string>("");
+  const [customerSearchOpen, setCustomerSearchOpen] = useState(false);
   const [customerContactId, setCustomerContactId] = useState<string>("");
 
   // ── Machine ──
@@ -526,44 +451,16 @@ export function RepairOrderCreate() {
               <p className="text-[13.5px] text-slate-500">
                 Register a new machine for repair
               </p>
-
-              {/* Step indicator */}
-              <ol className="mt-5 flex items-center gap-2 sm:gap-3">
-                {STEPS.map((label, i) => {
-                  const step = i + 1;
-                  const isActive = step === 1;
-                  return (
-                    <li key={label} className="flex items-center gap-2 sm:gap-3">
-                      <div className="flex flex-col items-center gap-1.5">
-                        <span
-                          className={`flex size-7 items-center justify-center rounded-full border-2 text-xs font-semibold ${
-                            isActive
-                              ? "border-blue-600 bg-blue-600 text-white"
-                              : "border-slate-300 bg-white text-slate-500"
-                          }`}
-                        >
-                          {step}
-                        </span>
-                        <span
-                          className={`text-[11px] font-medium ${
-                            isActive ? "text-blue-700" : "text-slate-500"
-                          }`}
-                        >
-                          {label}
-                        </span>
-                      </div>
-                      {step < STEPS.length && (
-                        <span className="mb-5 hidden h-px w-8 bg-slate-300 sm:block" />
-                      )}
-                    </li>
-                  );
-                })}
-              </ol>
             </div>
           </div>
 
           <div className="hidden shrink-0 md:block">
-            <TechnicianIllustration />
+            <img
+              src={repairPin}
+              alt=""
+              aria-hidden="true"
+              className="h-28 w-auto"
+            />
           </div>
         </div>
       </div>
@@ -639,26 +536,91 @@ export function RepairOrderCreate() {
                     Customer <span className="text-red-500">*</span>
                   </Label>
                   <FieldIcon icon={UserIcon}>
-                    <Select
-                      value={customerId}
-                      onValueChange={setCustomerId}
-                      disabled={loadingMasters}
+                    <Popover
+                      open={customerSearchOpen}
+                      onOpenChange={setCustomerSearchOpen}
                     >
-                      <SelectTrigger id="customer">
-                        <SelectValue
-                          placeholder={
-                            loadingMasters ? "Loading..." : "Select customer"
+                      <PopoverTrigger asChild>
+                        <button
+                          id="customer"
+                          type="button"
+                          role="combobox"
+                          aria-expanded={customerSearchOpen}
+                          disabled={loadingMasters}
+                          className="border-input focus-visible:border-ring focus-visible:ring-ring/50 flex h-9 w-full items-center justify-between gap-2 rounded-md border bg-input-background px-3 py-2 text-sm transition-[color,box-shadow] outline-none focus-visible:ring-[3px] disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          <span
+                            className={`line-clamp-1 text-left ${
+                              selectedCustomer ? "" : "text-muted-foreground"
+                            }`}
+                          >
+                            {selectedCustomer
+                              ? selectedCustomer.company
+                                ? `${selectedCustomer.company} — ${selectedCustomer.name}`
+                                : selectedCustomer.name
+                              : loadingMasters
+                                ? "Loading..."
+                                : "Search customer"}
+                          </span>
+                          <ChevronsUpDown className="size-4 shrink-0 opacity-50" />
+                        </button>
+                      </PopoverTrigger>
+                      <PopoverContent
+                        align="start"
+                        className="w-(--radix-popover-trigger-width) p-0"
+                      >
+                        <Command
+                          filter={(value, search) =>
+                            value.toLowerCase().includes(search.toLowerCase())
+                              ? 1
+                              : 0
                           }
-                        />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {customers.map((c) => (
-                          <SelectItem key={c.id} value={String(c.id)}>
-                            {c.company ? `${c.company} — ${c.name}` : c.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                        >
+                          <CommandInput placeholder="Search by name, company, email or phone..." />
+                          <CommandList>
+                            <CommandEmpty>No customer found.</CommandEmpty>
+                            <CommandGroup>
+                              {customers.map((c) => (
+                                <CommandItem
+                                  key={c.id}
+                                  value={[
+                                    c.name,
+                                    c.company,
+                                    c.email,
+                                    c.phone,
+                                    c.gstNumber,
+                                  ]
+                                    .filter(Boolean)
+                                    .join(" ")}
+                                  onSelect={() => {
+                                    setCustomerId(String(c.id));
+                                    setCustomerSearchOpen(false);
+                                  }}
+                                >
+                                  <Check
+                                    className={`size-4 shrink-0 ${
+                                      customerId === String(c.id)
+                                        ? "opacity-100"
+                                        : "opacity-0"
+                                    }`}
+                                  />
+                                  <div className="min-w-0">
+                                    <div className="truncate">
+                                      {c.company || c.name}
+                                    </div>
+                                    <div className="truncate text-xs text-slate-500">
+                                      {[c.company ? c.name : null, c.phone]
+                                        .filter(Boolean)
+                                        .join(" · ")}
+                                    </div>
+                                  </div>
+                                </CommandItem>
+                              ))}
+                            </CommandGroup>
+                          </CommandList>
+                        </Command>
+                      </PopoverContent>
+                    </Popover>
                   </FieldIcon>
                 </div>
 
@@ -879,6 +841,28 @@ export function RepairOrderCreate() {
               <div className="space-y-4">
                 <div className="space-y-1.5">
                   <Label
+                    htmlFor="customerComplaint"
+                    className="text-[13px] font-medium"
+                  >
+                    Customer Complaint <span className="text-red-500">*</span>
+                  </Label>
+                  <Textarea
+                    id="customerComplaint"
+                    value={service.customerComplaint}
+                    onChange={(e) =>
+                      setService({
+                        ...service,
+                        customerComplaint: e.target.value,
+                      })
+                    }
+                    placeholder="What the customer reported?"
+                    rows={3}
+                    required
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label
                     htmlFor="problemDescription"
                     className="text-[13px] font-medium"
                   >
@@ -906,28 +890,6 @@ export function RepairOrderCreate() {
                       {service.problemDescription.length}/500
                     </p>
                   </div>
-                </div>
-
-                <div className="space-y-1.5">
-                  <Label
-                    htmlFor="customerComplaint"
-                    className="text-[13px] font-medium"
-                  >
-                    Customer Complaint <span className="text-red-500">*</span>
-                  </Label>
-                  <Textarea
-                    id="customerComplaint"
-                    value={service.customerComplaint}
-                    onChange={(e) =>
-                      setService({
-                        ...service,
-                        customerComplaint: e.target.value,
-                      })
-                    }
-                    placeholder="What the customer reported?"
-                    rows={3}
-                    required
-                  />
                 </div>
 
                 <div className="space-y-1.5">

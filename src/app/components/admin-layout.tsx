@@ -1,5 +1,6 @@
 import { Outlet, Link, useLocation } from "react-router";
 import {
+  KeyRound,
   LayoutDashboard,
   Package,
   ShoppingCart,
@@ -35,6 +36,7 @@ import {
   DropdownMenuTrigger,
 } from "./ui/dropdown-menu";
 import { useAuth } from "../context/AuthContext";
+
 import { useNavigate } from "react-router";
 import type { LucideIcon } from "lucide-react";
 
@@ -239,7 +241,7 @@ function NavGroup({
 export function AdminLayout() {
   const location = useLocation();
   const navigate = useNavigate();
-  const { user, logout } = useAuth();
+  const { user, logout, can, roleLabel } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const currentView =
     new URLSearchParams(location.search).get("view") || "all";
@@ -353,7 +355,7 @@ export function AdminLayout() {
               <p className="mb-2 px-3 text-[11px] font-bold uppercase tracking-normal text-slate-500">
                 System
               </p>
-              {user?.role === "ROLE_ADMIN" && (
+              {can("USER_VIEW") && (
                 <NavLink
                   to="/admin/users"
                   icon={Users}
@@ -362,14 +364,24 @@ export function AdminLayout() {
                   onClick={() => setSidebarOpen(false)}
                 />
               )}
+              {can("COMPANY_SETTINGS_MANAGE") && (
+                <NavLink
+                  to="/admin/company-settings"
+                  icon={Settings}
+                  label="Company"
+                  isActive={location.pathname === "/admin/company-settings"}
+                  onClick={() => setSidebarOpen(false)}
+                />
+              )}
+              {/* Self-service: every signed-in user has an account to look after. */}
               <NavLink
-                to="/admin/company-settings"
-                icon={Settings}
-                label="Company"
-                isActive={location.pathname === "/admin/company-settings"}
+                to="/admin/account/security"
+                icon={KeyRound}
+                label="My account"
+                isActive={location.pathname === "/admin/account/security"}
                 onClick={() => setSidebarOpen(false)}
               />
-              {user?.role === "ROLE_ADMIN" && (
+              {can("EMAIL_SETTINGS_MANAGE") && (
                 <NavLink
                   to="/admin/email-settings"
                   icon={Mail}
@@ -403,7 +415,7 @@ export function AdminLayout() {
                       {user?.username || "TechSolution Pvt Ltd"}
                     </p>
                     <p className="truncate text-xs font-medium text-slate-500">
-                      {user?.role || "Ameya Pise"}
+                      {roleLabel}
                     </p>
                   </div>
                   <ChevronRight className="size-4 text-slate-500" />

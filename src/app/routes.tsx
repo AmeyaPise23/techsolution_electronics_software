@@ -32,9 +32,9 @@ import { QuotationView } from "./pages/quotation-view";
 import { AdminCategories } from "./pages/admin-categories";
 import { AdminLogin } from "./pages/admin-login";
 import { AdminUsers } from "./pages/admin-users";
+import { AccountSecurity } from "./pages/account-security";
 import { AdminCompanySettings } from "./pages/admin-company-settings";
 import { AdminEmailSettings } from "./pages/admin-email-settings";
-import { CompanyRegister } from "./pages/company-register";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 import { Cart } from "./pages/cart";
 import { Checkout } from "./pages/checkout";
@@ -89,10 +89,6 @@ export const router = createBrowserRouter([
     Component: AdminLogin,
   },
   {
-    path: "/register",
-    Component: CompanyRegister,
-  },
-  {
     path: "/admin",
     element: (
       <ProtectedRoute>
@@ -141,16 +137,32 @@ export const router = createBrowserRouter([
         Component: AdminOrders,
       },
       {
+        path: "account/security",
+        Component: AccountSecurity,
+      },
+      {
         path: "users",
-        Component: AdminUsers,
+        element: (
+          <ProtectedRoute requiredPermission="USER_VIEW">
+            <AdminUsers />
+          </ProtectedRoute>
+        ),
       },
       {
         path: "company-settings",
-        Component: AdminCompanySettings,
+        element: (
+          <ProtectedRoute requiredPermission="COMPANY_SETTINGS_MANAGE">
+            <AdminCompanySettings />
+          </ProtectedRoute>
+        ),
       },
       {
         path: "email-settings",
-        Component: AdminEmailSettings,
+        element: (
+          <ProtectedRoute requiredPermission="EMAIL_SETTINGS_MANAGE">
+            <AdminEmailSettings />
+          </ProtectedRoute>
+        ),
       },
       {
         path: "settings",
@@ -158,19 +170,35 @@ export const router = createBrowserRouter([
       },
       {
         path: "finance/overview",
-        Component: FinanceOverview,
+        element: (
+          <ProtectedRoute requiredPermission="FINANCE_VIEW">
+            <FinanceOverview />
+          </ProtectedRoute>
+        ),
       },
       {
         path: "finance/revenue",
-        Component: FinanceRevenue,
+        element: (
+          <ProtectedRoute requiredPermission="FINANCE_VIEW">
+            <FinanceRevenue />
+          </ProtectedRoute>
+        ),
       },
       {
         path: "finance/expenses",
-        Component: FinanceExpenses,
+        element: (
+          <ProtectedRoute requiredPermission="FINANCE_VIEW">
+            <FinanceExpenses />
+          </ProtectedRoute>
+        ),
       },
       {
         path: "finance/profit",
-        Component: FinanceProfit,
+        element: (
+          <ProtectedRoute requiredPermission="FINANCE_VIEW">
+            <FinanceProfit />
+          </ProtectedRoute>
+        ),
       },
       {
         // Legacy route kept as a redirect so bookmarks don't 404.
@@ -197,11 +225,19 @@ export const router = createBrowserRouter([
       },
       {
         path: "finance/cashflow",
-        Component: FinanceCashFlow,
+        element: (
+          <ProtectedRoute requiredPermission="FINANCE_VIEW">
+            <FinanceCashFlow />
+          </ProtectedRoute>
+        ),
       },
       {
         path: "finance/reports",
-        Component: FinanceReports,
+        element: (
+          <ProtectedRoute requiredPermission="FINANCE_VIEW">
+            <FinanceReports />
+          </ProtectedRoute>
+        ),
       },
       {
         path: "repair-orders",

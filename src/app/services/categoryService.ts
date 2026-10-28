@@ -35,10 +35,11 @@ interface ApiResponse<T> {
   data: T;
 }
 
-const API_BASE_URL =
-  import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8080/api";
+import { authService } from "./authService";
+import { API_BASE_URL } from "../config";
 
 const CATEGORY_BASE_URL = `${API_BASE_URL}/categories`;
+const authFetch = authService.authenticatedFetch.bind(authService);
 
 async function parseApiResponse<T>(response: Response): Promise<T> {
   const responseBody = await response.json();
@@ -100,13 +101,9 @@ export const categoryService = {
   },
 
   async createCategory(data: CategoryRequestDto): Promise<CategoryResponseDto> {
-    const token = localStorage.getItem("auth_token");
-    const response = await fetch(CATEGORY_BASE_URL, {
+    const response = await authFetch(CATEGORY_BASE_URL, {
       method: "POST",
-      headers: {
-        Authorization: `Bearer ${token}`,
-        "Content-Type": "application/json",
-      },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify(data),
     });
     return parseApiResponse<CategoryResponseDto>(response);
@@ -116,25 +113,17 @@ export const categoryService = {
     id: string,
     data: CategoryRequestDto
   ): Promise<CategoryResponseDto> {
-    const token = localStorage.getItem("auth_token");
-    const response = await fetch(`${CATEGORY_BASE_URL}/${id}`, {
+    const response = await authFetch(`${CATEGORY_BASE_URL}/${id}`, {
       method: "PUT",
-      headers: {
-        Authorization: `Bearer ${token}`,
-        "Content-Type": "application/json",
-      },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify(data),
     });
     return parseApiResponse<CategoryResponseDto>(response);
   },
 
   async deleteCategory(id: string): Promise<void> {
-    const token = localStorage.getItem("auth_token");
-    const response = await fetch(`${CATEGORY_BASE_URL}/${id}`, {
+    const response = await authFetch(`${CATEGORY_BASE_URL}/${id}`, {
       method: "DELETE",
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
     });
     await parseApiResponse<void>(response);
   },
